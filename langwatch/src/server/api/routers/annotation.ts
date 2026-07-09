@@ -1,8 +1,4 @@
-import {
-  type AnnotationQueueItem,
-  type PrismaClient,
-  PublicShareResourceTypes,
-} from "@prisma/client";
+import type { AnnotationQueueItem, PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -186,7 +182,7 @@ export const annotationRouter = createTRPCRouter({
       checkPermissionOrPubliclyShared(
         checkProjectPermission("annotations:view"),
         {
-          resourceType: PublicShareResourceTypes.TRACE,
+          resourceType: "TRACE",
           resourceParam: "traceId",
         },
       ),

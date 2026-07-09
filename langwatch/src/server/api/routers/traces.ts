@@ -1,5 +1,4 @@
 import { on } from "node:events";
-import { PublicShareResourceTypes } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import shuffle from "lodash-es/shuffle";
 import { z } from "zod";
@@ -50,7 +49,7 @@ export const tracesRouter = createTRPCRouter({
     .input(z.object({ projectId: z.string(), traceId: z.string() }))
     .use(
       checkPermissionOrPubliclyShared(checkProjectPermission("traces:view"), {
-        resourceType: PublicShareResourceTypes.TRACE,
+        resourceType: "TRACE",
         resourceParam: "traceId",
       }),
     )
@@ -81,7 +80,7 @@ export const tracesRouter = createTRPCRouter({
     .input(z.object({ projectId: z.string(), traceId: z.string() }))
     .use(
       checkPermissionOrPubliclyShared(checkProjectPermission("traces:view"), {
-        resourceType: PublicShareResourceTypes.TRACE,
+        resourceType: "TRACE",
         resourceParam: "traceId",
       }),
     )
@@ -213,7 +212,7 @@ export const tracesRouter = createTRPCRouter({
     )
     .use(
       checkPermissionOrPubliclyShared(checkProjectPermission("traces:view"), {
-        resourceType: PublicShareResourceTypes.TRACE,
+        resourceType: "TRACE",
         resourceParam: "traceId",
       }),
     )
@@ -235,23 +234,15 @@ export const tracesRouter = createTRPCRouter({
         return tracesGrouped;
       }
 
-      const publicSharedTraces = await ctx.prisma.publicShare.findMany({
-        where: {
-          projectId: projectId,
-          resourceType: PublicShareResourceTypes.TRACE,
-          resourceId: {
-            in: tracesGrouped.map((trace) => trace.trace_id),
-          },
-        },
-      });
-
-      const filteredTraces = tracesGrouped.filter((trace) =>
-        publicSharedTraces.some(
-          (publicShare) => publicShare.resourceId === trace.trace_id,
-        ),
+      // A share grant scoped to the whole thread reveals the full conversation;
+      // a grant scoped to a single trace reveals only that trace within it.
+      const grant = ctx.shareGrant;
+      if (grant?.thread_id && grant.thread_id === threadId) {
+        return tracesGrouped;
+      }
+      return tracesGrouped.filter(
+        (trace) => trace.trace_id === grant?.resource_id,
       );
-
-      return filteredTraces;
     }),
 
   getTracesWithSpans: protectedProcedure

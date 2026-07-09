@@ -487,12 +487,11 @@ export function initializeDefaultApp(options?: {
   const pinnedTraceService = new PinnedTraceService(
     pinnedTraceRepo,
     async ({ projectId, traceId }) => {
-      const share = await shareRepo.findByResource({
+      return shareRepo.hasActiveShareForResource({
         projectId,
         resourceType: "TRACE",
         resourceId: traceId,
       });
-      return share !== null;
     },
   );
   const retroactiveUpdateService = new RetroactiveUpdateService(
