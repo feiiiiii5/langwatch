@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LiteMemberRestrictedError } from "../errors";
-import { DomainError } from "../../domain-error";
+import { HandledError } from "../../domain-error";
 
 describe("LiteMemberRestrictedError", () => {
   describe("when constructed with a resource", () => {
@@ -26,9 +26,9 @@ describe("LiteMemberRestrictedError", () => {
       expect(error.meta).toEqual({ resource: "datasets" });
     });
 
-    it("is an instance of DomainError", () => {
+    it("is an instance of HandledError", () => {
       const error = new LiteMemberRestrictedError("prompts");
-      expect(error).toBeInstanceOf(DomainError);
+      expect(error).toBeInstanceOf(HandledError);
     });
 
     it("sets name to LiteMemberRestrictedError", () => {

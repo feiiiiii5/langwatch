@@ -37,7 +37,7 @@ import {
 } from "~/server/api-key/auth-middleware";
 import { TokenResolver } from "~/server/api-key/token-resolver";
 import { getApp } from "~/server/app-layer/app";
-import { DomainError } from "~/server/app-layer/domain-error";
+import { HandledError } from "~/server/app-layer/domain-error";
 import { EvaluatorMissingFieldError } from "~/server/app-layer/evaluations/errors";
 import { prisma } from "~/server/db";
 import {
@@ -256,7 +256,7 @@ secured
           });
           const validationError = fromZodError(error);
           return c.json({ error: validationError.message }, 400);
-        } else if (DomainError.is(error)) {
+        } else if (HandledError.is(error)) {
           logger.warn(
             { kind: error.kind, meta: error.meta, projectId: project.id },
             "domain error processing batch evaluation",

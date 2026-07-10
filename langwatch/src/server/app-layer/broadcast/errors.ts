@@ -1,6 +1,6 @@
-import { DomainError } from "../domain-error";
+import { HandledError } from "../domain-error";
 
-export class BroadcasterNotActiveError extends DomainError {
+export class BroadcasterNotActiveError extends HandledError {
   declare readonly kind: "broadcaster_not_active";
 
   constructor(options: { reasons?: readonly Error[] } = {}) {

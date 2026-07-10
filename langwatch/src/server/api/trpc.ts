@@ -35,7 +35,7 @@ import type { Parser } from "@trpc-internal/parser";
 import type { UnsetMarker } from "@trpc-internal/utils";
 import superjson from "superjson";
 import { ZodError } from "zod";
-import { DomainError } from "~/server/app-layer/domain-error";
+import { HandledError } from "~/server/app-layer/domain-error";
 import type { Session } from "~/server/auth";
 import { getServerAuthSession } from "~/server/auth";
 import { prisma } from "~/server/db";
@@ -146,7 +146,7 @@ export function errorFormatterForTesting({
     : null;
 
   const domainError =
-    error.cause instanceof DomainError ? error.cause.serialize() : null;
+    error.cause instanceof HandledError ? error.cause.serialize() : null;
 
   // Surface ModelNotConfiguredError on the wire so the frontend
   // interceptor in `utils/trpcError.ts::extractMissingModelInfo` can
@@ -481,7 +481,7 @@ export const tracerMiddleware = t.middleware(async ({ path, type, next }) => {
   );
 });
 
-function domainErrorToTRPCCode(error: DomainError): TRPCError["code"] {
+function domainErrorToTRPCCode(error: HandledError): TRPCError["code"] {
   const map: Partial<Record<number, TRPCError["code"]>> = {
     400: "BAD_REQUEST",
     401: "UNAUTHORIZED",
@@ -495,13 +495,13 @@ function domainErrorToTRPCCode(error: DomainError): TRPCError["code"] {
 }
 
 /**
- * Converts DomainErrors thrown in procedures to properly-coded TRPCErrors.
- * Without this, DomainErrors fall through as INTERNAL_SERVER_ERROR.
+ * Converts HandledErrors thrown in procedures to properly-coded TRPCErrors.
+ * Without this, HandledErrors fall through as INTERNAL_SERVER_ERROR.
  * Placed inner to loggerMiddleware so the logger sees the correct code.
  */
 const domainErrorMiddleware = t.middleware(async ({ next }) => {
   const result = await next();
-  if (!result.ok && result.error.cause instanceof DomainError) {
+  if (!result.ok && result.error.cause instanceof HandledError) {
     const domainError = result.error.cause;
     throw new TRPCError({
       code: domainErrorToTRPCCode(domainError),
@@ -590,7 +590,7 @@ export function handleTrpcCallLogging({
     // Include domain error kind in log data for structured filtering
     if (
       result.error instanceof TRPCError &&
-      result.error.cause instanceof DomainError
+      result.error.cause instanceof HandledError
     ) {
       logData.domainErrorKind = result.error.cause.kind;
     }

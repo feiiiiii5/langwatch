@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
-import { DomainError } from "../app-layer/domain-error";
+import { HandledError } from "../app-layer/domain-error";
 import { Actions, Resources } from "../api/rbac";
 
 const VALID_PERMISSIONS: Set<string> = new Set(
@@ -30,7 +30,7 @@ export const CustomRolePermissionsSchema = z.array(permissionFormatSchema);
  * "no permissions granted" is a dangerous fail-open (nothing to verify →
  * every check trivially passes).
  */
-export class MalformedCustomRolePermissionsError extends DomainError {
+export class MalformedCustomRolePermissionsError extends HandledError {
   declare readonly kind: "malformed_custom_role_permissions";
 
   constructor(

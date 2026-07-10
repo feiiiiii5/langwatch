@@ -6,7 +6,7 @@
  * returned title/description.
  */
 
-export interface DomainErrorShape {
+export interface HandledErrorShape {
   kind: string;
   meta: Record<string, unknown>;
   httpStatus: number;
@@ -18,7 +18,7 @@ export interface DomainErrorShape {
  *  malformed payload can't crash `explainDomainError` on `domain.meta.*`
  *  access — the helper trusts `unknown` input and a misconfigured server
  *  shouldn't take the UI with it. */
-export function readDomainError(err: unknown): DomainErrorShape | null {
+export function readDomainError(err: unknown): HandledErrorShape | null {
   const candidate = (err as { data?: { domainError?: unknown } })?.data
     ?.domainError;
   if (!candidate || typeof candidate !== "object") return null;
@@ -41,15 +41,15 @@ export function readDomainError(err: unknown): DomainErrorShape | null {
   };
 }
 
-export interface DomainErrorExplanation {
+export interface HandledErrorExplanation {
   title: string;
   /** Empty string when there's nothing to add beyond the title. */
   description: string;
 }
 
 export function explainDomainError(
-  domain: DomainErrorShape,
-): DomainErrorExplanation {
+  domain: HandledErrorShape,
+): HandledErrorExplanation {
   switch (domain.kind) {
     case "template_validation_error": {
       const field = String(domain.meta.field ?? "template");

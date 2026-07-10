@@ -4,7 +4,7 @@ import { TokenResolver, type OrgResolvedToken, type ResolvedToken } from "./toke
 import { ApiKeyPermissionDeniedError } from "./errors";
 import type { Permission } from "~/server/api/rbac";
 import { resolveApiKeyPermission } from "~/server/rbac/role-binding-resolver";
-import { DomainError } from "~/server/app-layer/domain-error";
+import { HandledError } from "~/server/app-layer/domain-error";
 import { createLogger } from "~/utils/logger/server";
 import { getTokenType } from "./api-key-token.utils";
 
@@ -382,7 +382,7 @@ export async function enforceApiKeyCeiling({
 export function apiKeyCeilingDenialResponse(
   error: unknown,
 ): { error: string; message: string; status: 403 } {
-  if (DomainError.isHandled(error) && error.kind === "api_key_permission_denied") {
+  if (HandledError.isHandled(error) && error.kind === "api_key_permission_denied") {
     return { error: "Forbidden", message: error.message, status: 403 };
   }
   throw error;

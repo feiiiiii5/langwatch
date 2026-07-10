@@ -18,7 +18,7 @@ import {
 import type { Permission } from "~/server/api/rbac";
 import { checkRoleBindingPermission } from "~/server/rbac/role-binding-resolver";
 import { parseCustomRolePermissions, permissionFormatSchema } from "~/server/rbac/custom-role-permissions";
-import { DomainError } from "~/server/app-layer/domain-error";
+import { HandledError } from "~/server/app-layer/domain-error";
 import { createLogger } from "~/utils/logger/server";
 import { generate } from "@langwatch/ksuid";
 import { KSUID_RESOURCES } from "~/utils/constants";
@@ -548,7 +548,7 @@ export class ApiKeyService {
         permissions: customRole.permissions,
       });
     } catch (err) {
-      if (DomainError.isHandled(err) && err.kind === "malformed_custom_role_permissions") {
+      if (HandledError.isHandled(err) && err.kind === "malformed_custom_role_permissions") {
         throw new ApiKeyScopeViolationError(
           `Custom role ${customRoleId} has malformed permissions`,
           {

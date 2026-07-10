@@ -1,5 +1,5 @@
 /**
- * Unit tests for the REST handler that maps system-prompt DomainErrors
+ * Unit tests for the REST handler that maps system-prompt HandledErrors
  * thrown by the prompt service to Hono HTTP exceptions.
  *
  * Pinned by Issue #3196 so a future refactor of either error class can

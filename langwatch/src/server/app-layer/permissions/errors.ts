@@ -1,6 +1,6 @@
-import { DomainError } from "../domain-error";
+import { HandledError } from "../domain-error";
 
-export class LiteMemberRestrictedError extends DomainError {
+export class LiteMemberRestrictedError extends HandledError {
   declare readonly kind: "lite_member_restricted";
 
   constructor(resource: string) {

@@ -6,7 +6,7 @@ import {
 } from "~/server/prompt-config/errors";
 
 /**
- * Maps system-prompt DomainErrors thrown by the prompt service to Hono HTTP
+ * Maps system-prompt HandledErrors thrown by the prompt service to Hono HTTP
  * exceptions with the correct status code.
  *
  *   - {@link SystemPromptConflictError} → 409 Conflict
@@ -16,7 +16,7 @@ import {
  *
  * Any other error type is re-thrown unchanged so the global handler can deal
  * with it. The error's own `message` is forwarded as the response body, since
- * both DomainErrors carry user-facing copy.
+ * both HandledErrors carry user-facing copy.
  *
  * @param error - The error to handle
  * @returns void

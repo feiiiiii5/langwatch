@@ -5,7 +5,7 @@ Feature: Domain errors — the handled-error boundary
 
     - HANDLED — we understand it and the caller can act on it (not found,
       forbidden, not-owned, timeout, validation, conflict, rate-limited). It is a
-      `DomainError` in TypeScript / an `herr.E` in Go, with a stable `kind`
+      `HandledError` in TypeScript / an `herr.E` in Go, with a stable `kind`
       (Go: `Code`), user-relevant `message`, structured `meta`, `telemetry`
       (traceId/spanId), an `httpStatus`, and a `reasons` cause chain.
     - UNHANDLED — anything we did not anticipate (a database crash, a nil deref,
@@ -23,9 +23,9 @@ Feature: Domain errors — the handled-error boundary
   its intended behaviour and its reach.
 
   Background:
-    Given the DomainError base and its serialisation are available in the app layer
+    Given the HandledError base and its serialisation are available in the app layer
     And tRPC attaches a serialised domain error to `data.domainError`
-    And Hono's `onError` normalises a DomainError to `{ error: kind, message, ...meta }`
+    And Hono's `onError` normalises a HandledError to `{ error: kind, message, ...meta }`
 
   # ==========================================================================
   # Handled: known, user-relevant failures cross the boundary with meaning
@@ -42,7 +42,7 @@ Feature: Domain errors — the handled-error boundary
 
   @bdd @domain-errors
   Scenario: A known failure is normalised by Hono to a client-safe body
-    Given a service route throws a DomainError of kind "conversation_not_owned" with httpStatus 403
+    Given a service route throws a HandledError of kind "conversation_not_owned" with httpStatus 403
     When the client calls that route
     Then the HTTP status is 403
     And the response body is { error: "conversation_not_owned", message, ...meta }
@@ -55,7 +55,7 @@ Feature: Domain errors — the handled-error boundary
 
   @bdd @domain-errors
   Scenario: Telemetry is captured from the active span
-    Given a DomainError is constructed inside an active OTel span
+    Given a HandledError is constructed inside an active OTel span
     Then its telemetry carries that span's traceId and spanId
     And the client can link the error to its trace
 
@@ -82,7 +82,7 @@ Feature: Domain errors — the handled-error boundary
   @bdd @domain-errors
   Scenario: We never invent a domain error for an unknown cause
     Given a failure we cannot name (an unexpected bug)
-    Then the code throws a plain Error, not a DomainError subclass
+    Then the code throws a plain Error, not a HandledError subclass
     And it correctly degrades to "unknown" at the boundary
 
   # ==========================================================================
@@ -93,7 +93,7 @@ Feature: Domain errors — the handled-error boundary
   Scenario: A Go herr proxied by the control plane arrives as a domain error
     Given a Go service returns an herr.E with Code "github_unreachable" and a trace id
     When the control plane proxies that failure to the client
-    Then it is adapted into a DomainError (Code→kind, meta→meta, trace_id→telemetry)
+    Then it is adapted into a HandledError (Code→kind, meta→meta, trace_id→telemetry)
     And the client receives kind "github_unreachable" with its meta and trace link
 
   @bdd @domain-errors @unimplemented
@@ -110,7 +110,7 @@ Feature: Domain errors — the handled-error boundary
   @bdd @domain-errors @unimplemented
   Scenario: A streamed response carries the serialised domain error on its error event
     Given a streamed endpoint (e.g. the Langy chat stream) hits a known failure mid-stream
-    Then its error event carries the SerializedDomainError, not a plain string
+    Then its error event carries the SerializedHandledError, not a plain string
     And the client applies the same handled/unknown logic as for a tRPC error
 
   # ==========================================================================

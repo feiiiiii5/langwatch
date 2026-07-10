@@ -1,4 +1,4 @@
-import { DomainError, NotFoundError } from "../app-layer/domain-error";
+import { HandledError, NotFoundError } from "../app-layer/domain-error";
 
 /**
  * Thrown when an API key cannot be located by id.
@@ -18,7 +18,7 @@ export class ApiKeyNotFoundError extends NotFoundError {
 /**
  * Thrown when a user attempts to modify an API key they do not own.
  */
-export class ApiKeyNotOwnedError extends DomainError {
+export class ApiKeyNotOwnedError extends HandledError {
   declare readonly kind: "api_key_not_owned";
 
   constructor(
@@ -37,7 +37,7 @@ export class ApiKeyNotOwnedError extends DomainError {
 /**
  * Thrown when an API key is already revoked and cannot be revoked again.
  */
-export class ApiKeyAlreadyRevokedError extends DomainError {
+export class ApiKeyAlreadyRevokedError extends HandledError {
   declare readonly kind: "api_key_already_revoked";
 
   constructor(
@@ -59,7 +59,7 @@ export class ApiKeyAlreadyRevokedError extends DomainError {
  * permission set (intersection of requested scopes ∩ user's current role)
  * does not grant the action.
  */
-export class ApiKeyPermissionDeniedError extends DomainError {
+export class ApiKeyPermissionDeniedError extends HandledError {
   declare readonly kind: "api_key_permission_denied";
 
   constructor(
@@ -87,7 +87,7 @@ export class ApiKeyPermissionDeniedError extends DomainError {
  * creator's ceiling — e.g., binding a role the creator does not hold on the
  * target scope. Surfaced to the user before the token is persisted.
  */
-export class ApiKeyScopeViolationError extends DomainError {
+export class ApiKeyScopeViolationError extends HandledError {
   declare readonly kind: "api_key_scope_violation";
 
   constructor(

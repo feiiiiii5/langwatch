@@ -1087,7 +1087,7 @@ export const tracesV2Router = createTRPCRouter({
    * Lets a user rename a trace. Trim happens in the procedure so the event
    * always carries a canonical form, then the schema check rejects empty /
    * over-long names — when those rejections fire we surface them as a
-   * `ValidationError` (DomainError), so the client receives the rich
+   * `ValidationError` (HandledError), so the client receives the rich
    * `domainError` payload via tRPC's error formatter alongside the safe
    * user-facing message. The command pipeline still re-validates via Zod
    * as a defence-in-depth check (replays from a poisoned event store).

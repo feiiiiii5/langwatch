@@ -1,7 +1,7 @@
 import { trace } from "@opentelemetry/api";
 import type { ZodError } from "zod";
 
-export interface DomainErrorTelemetry {
+export interface HandledErrorTelemetry {
   traceId: string | undefined;
   spanId: string | undefined;
 }
@@ -15,7 +15,7 @@ export interface SerializedReason {
 export interface SerializedDomainError {
   kind: string;
   meta: Record<string, unknown>;
-  telemetry: DomainErrorTelemetry;
+  telemetry: HandledErrorTelemetry;
   httpStatus: number;
   reasons: SerializedReason[];
 }
@@ -48,10 +48,10 @@ export interface SerializedDomainError {
  * }
  * ```
  */
-export abstract class DomainError extends Error {
+export abstract class HandledError extends Error {
   readonly isHandled = true as const;
   readonly meta: Record<string, unknown>;
-  readonly telemetry: DomainErrorTelemetry;
+  readonly telemetry: HandledErrorTelemetry;
   readonly httpStatus: number;
   readonly reasons: readonly Error[];
 
@@ -89,34 +89,34 @@ export abstract class DomainError extends Error {
    * Usage:
    *   EvaluationNotFoundError.is(err)   // error is EvaluationNotFoundError
    *   NotFoundError.is(err)             // error is NotFoundError
-   *   DomainError.is(err)               // error is DomainError
+   *   HandledError.is(err)               // error is HandledError
    */
-  static is<T extends DomainError>(
+  static is<T extends HandledError>(
     this: abstract new (...args: never) => T,
     error: unknown,
   ): error is T {
     return error instanceof this;
   }
 
-  /** Returns true when `error` is a known, handled DomainError. */
-  static isHandled(error: unknown): error is DomainError {
-    return error instanceof DomainError;
+  /** Returns true when `error` is a known, handled HandledError. */
+  static isHandled(error: unknown): error is HandledError {
+    return error instanceof HandledError;
   }
 
   /** Returns true when `error` is an unhandled infrastructure Error. */
   static isUnhandled(error: unknown): boolean {
-    return error instanceof Error && !(error instanceof DomainError);
+    return error instanceof Error && !(error instanceof HandledError);
   }
 
   /**
    * Returns a safe user-facing message for any error:
-   * - DomainErrors → their own message (safe to show users)
+   * - HandledErrors → their own message (safe to show users)
    * - Everything else → a generic "unknown error" string, and the original
    *   error is passed to the optional `log` callback for server-side logging.
    *
    * ```ts
    * } catch (e) {
-   *   const msg = DomainError.toUserMessage(e, (err) => logger.error(err));
+   *   const msg = HandledError.toUserMessage(e, (err) => logger.error(err));
    *   throw new TRPCError({ code: "NOT_FOUND", message: msg });
    * }
    * ```
@@ -125,14 +125,14 @@ export abstract class DomainError extends Error {
     error: unknown,
     log?: (error: unknown) => void,
   ): string {
-    if (error instanceof DomainError) return error.message;
+    if (error instanceof HandledError) return error.message;
     log?.(error);
     return "An unknown error occurred";
   }
 }
 
 function serializeReason(error: Error): SerializedReason {
-  if (error instanceof DomainError) {
+  if (error instanceof HandledError) {
     return {
       kind: error.kind,
       ...(Object.keys(error.meta).length > 0 && { meta: error.meta }),
@@ -151,7 +151,7 @@ function serializeReason(error: Error): SerializedReason {
  * Domain-specific subclasses narrow `kind` via `declare` and populate `meta`
  * with identifying fields (e.g. `{ spanId }`).
  */
-export class NotFoundError extends DomainError {
+export class NotFoundError extends HandledError {
   constructor(
     kind: string,
     resource: string,
@@ -170,7 +170,7 @@ export class NotFoundError extends DomainError {
 /**
  * Thrown when input fails domain-level validation rules (HTTP 422).
  */
-export class ValidationError extends DomainError {
+export class ValidationError extends HandledError {
   constructor(
     message: string,
     options: { meta?: Record<string, unknown>; reasons?: readonly Error[] } = {},

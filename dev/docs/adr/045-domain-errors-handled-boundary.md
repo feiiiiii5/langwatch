@@ -1,4 +1,4 @@
-# ADR-045: Domain errors as the handled-error boundary (TS `DomainError` ⇔ Go `herr`)
+# ADR-045: Handled errors as the handled-error boundary (TS `HandledError` ⇔ Go `herr`)
 
 **Date:** 2026-07-10
 
@@ -19,18 +19,18 @@ the whole point:
    The caller cannot act on the raw detail, and presenting it as if they could is
    both a poor experience and a leak surface.
 
-The platform already has the machinery for (1): the app-layer `DomainError`
+The platform already has the machinery for (1): the app-layer `HandledError`
 (`src/server/app-layer/domain-error.ts`) — an abstract `Error` subclass carrying
 a serialisable `kind`, `meta`, `telemetry` (traceId/spanId captured from the
 active OTel span), `httpStatus`, and a `reasons` cause chain, with a
-`serialize()` producing `SerializedDomainError`. It is wired into both transports:
+`serialize()` producing `SerializedHandledError`. It is wired into both transports:
 
 - **tRPC** (`src/server/api/trpc.ts`): a `domainErrorMiddleware` converts a
-  `DomainError` thrown in a procedure into a correctly-coded `TRPCError` (via
+  `HandledError` thrown in a procedure into a correctly-coded `TRPCError` (via
   `domainErrorToTRPCCode`), and the `errorFormatter` calls `.serialize()` and
   attaches the result to the error's `data.domainError`.
 - **Hono** (`src/app/api/middleware/error-handler.ts`, wired by every
-  `createServiceApp` at `SecuredApp.onError`): a `DomainError` becomes
+  `createServiceApp` at `SecuredApp.onError`): a `HandledError` becomes
   `{ error: kind, message, ...meta }` at its `httpStatus`.
 
 The Go services have the exact same split in `pkg/herr`: a handled error is an
@@ -42,11 +42,11 @@ non-`herr` reasons** before they leave the process.
 What is missing is not machinery but **discipline and reach**. Large parts of the
 codebase — the Langy route is the clearest offender — hand-roll
 `c.json({ error: "..." }, { status })` with generic strings, or wrap unknown
-failures in ad-hoc `extends Error` classes, bypassing the `DomainError` path
+failures in ad-hoc `extends Error` classes, bypassing the `HandledError` path
 entirely. The result is opaque, inconsistent errors: the same "not found" is a
 typed 404 in one place and a bare string in another, and an internal crash can
 surface its raw message as though it were an actionable API error. We also have
-no stated rule for **when** to reach for a `DomainError` versus a plain `Error`,
+no stated rule for **when** to reach for a `HandledError` versus a plain `Error`,
 so the two get used interchangeably.
 
 ## Decision
@@ -57,7 +57,7 @@ an unknown/internal error.**
 
 Concretely:
 
-1. **Throw a `DomainError` (Go: return an `herr.E`) only when the cause is both
+1. **Throw a `HandledError` (Go: return an `herr.E`) only when the cause is both
    known and user-relevant.** Not-found, forbidden, not-owned, validation,
    conflict, timeout, rate-limited, precondition-not-met, quota-exceeded — the
    failures we can name and a caller can respond to. Give each a stable `kind`
@@ -65,36 +65,36 @@ Concretely:
 
 2. **For anything internal or unanticipated, use a plain JavaScript `Error` (Go:
    a plain `error`).** A database crash, an infra timeout we don't model, a bug.
-   Do **not** invent a `DomainError` to dress it up. It will correctly degrade to
+   Do **not** invent a `HandledError` to dress it up. It will correctly degrade to
    "unknown" at the boundary.
 
 3. **The boundary only serialises handled errors.** The presence of a serialised
    domain payload IS the signal of "handled":
-   - tRPC: `data.domainError` is the `SerializedDomainError`, or `null`.
-   - Hono: a `DomainError` yields `{ error: kind, message, ...meta }`; an
+   - tRPC: `data.domainError` is the `SerializedHandledError`, or `null`.
+   - Hono: a `HandledError` yields `{ error: kind, message, ...meta }`; an
      unhandled error yields a generic internal response.
    - An unhandled error carries **no** `domainError` payload. Its raw detail is
      **logged server-side with the trace id**, never presented to the client as
      an actionable error. Clients render it as a single generic "something went
-     wrong" plus the trace id for support (`DomainError.toUserMessage` already
-     returns `"An unknown error occurred"` for non-domain errors and hands the
+     wrong" plus the trace id for support (`HandledError.toUserMessage` already
+     returns `"An unknown error occurred"` for non-handled errors and hands the
      original to a log callback).
 
 4. **A handled error may wrap an unhandled cause without leaking it.**
-   `serialize()` walks `reasons` and masks any non-`DomainError` link as
+   `serialize()` walks `reasons` and masks any non-`HandledError` link as
    `{ kind: "unknown" }`. So `new EvaluationNotFoundError(..., { reasons: [pgError] })`
    keeps the useful top and hides the internal bottom. Use this when a known
    failure was ultimately triggered by an internal one.
 
 5. **Handled-ness is preserved across the Go↔TS boundary.** When the control
    plane proxies a Go service, an `herr` envelope is adapted into a
-   `DomainError` (`Code → kind`, `meta → meta`, `trace_id/span_id →
+   `HandledError` (`Code → kind`, `meta → meta`, `trace_id/span_id →
    telemetry`, `reasons → reasons`); a plain Go `error` stays unhandled and
    becomes "unknown." A handled error in Go is a handled error in the browser.
 
 6. **Non-tRPC/Hono transports carry the same shape.** Streamed responses (e.g.
    the Langy chat NDJSON stream) that today emit `{ type: "error", error:
-   string }` must instead emit the `SerializedDomainError` on their error event,
+   string }` must instead emit the `SerializedHandledError` on their error event,
    so the client's handled/unknown logic is identical regardless of transport.
 
 7. **The client is the single place that decides presentation.** A shared reader
@@ -115,7 +115,7 @@ boundary, which is why the Hono handler checks `"kind" in error`).
 
 The alternative — let every route decide its own error shape — is what we have,
 and it produces exactly the opacity described above. Centralising on
-`DomainError`/`herr` costs each domain a small `errors.ts` of typed subclasses
+`HandledError`/`herr` costs each domain a small `errors.ts` of typed subclasses
 and the discipline to throw them instead of returning strings, but it buys a
 single, predictable contract: a client (human or agent) can always tell a "you
 did something we understand, here's what and why" from a "we broke, sorry,"
@@ -138,23 +138,23 @@ the reference.
 
 ## Consequences
 
-- **New per-domain `errors.ts` modules** of `DomainError` subclasses, each with a
+- **New per-domain `errors.ts` modules** of `HandledError` subclasses, each with a
   stable `kind` and a sensible `httpStatus`. Existing ad-hoc `extends Error`
   classes (e.g. Langy's `LangyCredentialResolutionError`,
-  `LangyConversationNotOwnedError`) become `DomainError` subclasses with a `kind`.
+  `LangyConversationNotOwnedError`) become `HandledError` subclasses with a `kind`.
 - **Service routes stop hand-rolling `c.json({ error: string })`.** They throw a
-  `DomainError`; `createServiceApp`'s `onError` already serialises it. A generic
+  `HandledError`; `createServiceApp`'s `onError` already serialises it. A generic
   string response becomes a code smell.
 - **Streamed transports gain a structured error event** carrying
-  `SerializedDomainError`. The Langy chat stream is the first adopter.
-- **The control plane grows a small `herr → DomainError` adapter** used wherever
+  `SerializedHandledError`. The Langy chat stream is the first adopter.
+- **The control plane grows a small `herr → HandledError` adapter** used wherever
   it proxies a Go service (Langy agent, NLP, gateway), so cross-language handled
   errors stay handled.
 - **The client standardises on `readDomainError` + a `kind`-keyed explainer.**
   Features render handled errors usefully and unhandled errors as one calm
   generic state plus a trace id. Langy's `<LangyError>` is a richer instance of
   this pattern (card / inline / suppress).
-- **Observability improves for free:** every `DomainError` captures the active
+- **Observability improves for free:** every `HandledError` captures the active
   span's trace/span id, and tRPC already logs `domainErrorKind`, so handled
   failures are queryable by kind and joinable to their trace.
 - **"Unknown" is a first-class, intended outcome.** An unhandled error producing
@@ -163,8 +163,8 @@ the reference.
 
 ## References
 
-- Code (TS): `src/server/app-layer/domain-error.ts` (`DomainError`,
-  `SerializedDomainError`, `NotFoundError`, `ValidationError`),
+- Code (TS): `src/server/app-layer/domain-error.ts` (`HandledError`,
+  `SerializedHandledError`, `NotFoundError`, `ValidationError`),
   `src/server/api/trpc.ts` (`domainErrorMiddleware`, `errorFormatter`),
   `src/app/api/middleware/error-handler.ts` (`handleError`),
   `src/features/automations/logic/errorExplainer.ts`

@@ -2,14 +2,14 @@ import { RoleBindingScopeType, TeamUserRole } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { DomainError } from "~/server/app-layer/domain-error";
+import { HandledError } from "~/server/app-layer/domain-error";
 import { ApiKeyService } from "~/server/api-key/api-key.service";
 import { auditLog } from "~/server/auditLog";
 import { skipPermissionCheck } from "../rbac";
 import { permissionFormatSchema } from "~/server/rbac/custom-role-permissions";
 
 function mapApiKeyDomainError(error: unknown): never {
-  if (DomainError.isHandled(error)) {
+  if (HandledError.isHandled(error)) {
     switch (error.kind) {
       case "api_key_not_found":
         throw new TRPCError({ code: "NOT_FOUND", message: error.message, cause: error });

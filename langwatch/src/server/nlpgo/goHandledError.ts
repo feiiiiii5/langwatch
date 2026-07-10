@@ -1,6 +1,6 @@
 import { APICallError, RetryError } from "ai";
 import { z } from "zod";
-import { DomainError } from "../app-layer/domain-error";
+import { HandledError } from "../app-layer/domain-error";
 
 /**
  * nlpgo's handled-error envelope (services/nlpgo herr package). Every
@@ -26,7 +26,7 @@ const goErrorEnvelopeSchema = z.object({
  * `meta.reason` when present (e.g. "missing_provider"), the envelope
  * `type` otherwise (e.g. "bad_request").
  */
-export class NlpgoHandledError extends DomainError {
+export class NlpgoHandledError extends HandledError {
   constructor(
     kind: string,
     message: string,

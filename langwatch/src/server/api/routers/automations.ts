@@ -12,7 +12,7 @@ import {
 import { EMAIL_RX } from "~/automations/providers/definitions/email/shared";
 import { actionParamsSchemaFor } from "~/automations/providers/server";
 import { getApp } from "~/server/app-layer/app";
-import { DomainError } from "~/server/app-layer/domain-error";
+import { HandledError } from "~/server/app-layer/domain-error";
 import {
   InvalidEmailRecipientError,
   MissingAnnotatorError,
@@ -123,14 +123,14 @@ function httpStatusToTRPCCode(httpStatus: number): TRPCErrorCode {
 
 /**
  * Wraps any thrown value as a `TRPCError` whose `cause` is preserved when the
- * value is a `DomainError`. The shared `errorFormatter` in `trpc.ts` serialises
+ * value is a `HandledError`. The shared `errorFormatter` in `trpc.ts` serialises
  * that cause as `error.data.domainError = { kind, meta, telemetry, … }` so the
  * client gets the full structured payload — that is the "incredibly good error
  * handling" surface (see ADR-036 follow-up).
  */
 function toTemplateTRPCError(err: unknown): TRPCError {
   if (err instanceof TRPCError) return err;
-  if (err instanceof DomainError) {
+  if (err instanceof HandledError) {
     return new TRPCError({
       code: httpStatusToTRPCCode(err.httpStatus),
       message: err.message,

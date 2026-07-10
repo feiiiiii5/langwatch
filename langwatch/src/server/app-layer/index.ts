@@ -1,6 +1,6 @@
 // Domain errors
 export {
-  DomainError,
+  HandledError,
   NotFoundError,
   ValidationError
 } from "./domain-error";

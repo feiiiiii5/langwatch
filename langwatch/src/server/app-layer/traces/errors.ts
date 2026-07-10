@@ -1,5 +1,5 @@
 // TODO: wire or delete — never thrown
-import { DomainError, NotFoundError } from "~/server/app-layer/domain-error";
+import { HandledError, NotFoundError } from "~/server/app-layer/domain-error";
 
 export class TraceNotFoundError extends NotFoundError {
   declare readonly kind: "trace_not_found";
@@ -25,7 +25,7 @@ export class SpanNotFoundError extends NotFoundError {
   }
 }
 
-export class QueryTimeoutError extends DomainError {
+export class QueryTimeoutError extends HandledError {
   declare readonly kind: "query_timeout";
 
   constructor(durationMs: number, hint?: string) {
@@ -41,7 +41,7 @@ export class QueryTimeoutError extends DomainError {
   }
 }
 
-export class FilterParseError extends DomainError {
+export class FilterParseError extends HandledError {
   declare readonly kind: "filter_parse_error";
 
   constructor(message: string, position?: number) {
@@ -56,7 +56,7 @@ export class FilterParseError extends DomainError {
   }
 }
 
-export class FilterFieldUnknownError extends DomainError {
+export class FilterFieldUnknownError extends HandledError {
   declare readonly kind: "filter_field_unknown";
 
   constructor(field: string, knownFields: string[]) {
@@ -68,7 +68,7 @@ export class FilterFieldUnknownError extends DomainError {
   }
 }
 
-export class TimeRangeTooWideError extends DomainError {
+export class TimeRangeTooWideError extends HandledError {
   declare readonly kind: "time_range_too_wide";
 
   constructor(maxDays: number) {
@@ -84,7 +84,7 @@ export class TimeRangeTooWideError extends DomainError {
   }
 }
 
-export class ClickHouseUnavailableError extends DomainError {
+export class ClickHouseUnavailableError extends HandledError {
   declare readonly kind: "clickhouse_unavailable";
 
   constructor() {

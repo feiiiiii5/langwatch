@@ -16,7 +16,7 @@ export const generatedScenarioSchema = z.object({
  */
 export type GeneratedScenario = z.infer<typeof generatedScenarioSchema>;
 
-/** Serialized DomainError shape the generate endpoint attaches to handled failures */
+/** Serialized HandledError shape the generate endpoint attaches to handled failures */
 const serializedDomainErrorSchema = z.object({
   kind: z.string(),
   meta: z.record(z.string(), z.unknown()).optional(),
