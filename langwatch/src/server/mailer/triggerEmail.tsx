@@ -1,9 +1,5 @@
 import type { AlertType } from "@prisma/client";
-import { Column, Link, Row, Section } from "@react-email/components";
-import { Container } from "@react-email/container";
-import { Heading } from "@react-email/heading";
-import { Html } from "@react-email/html";
-import { Img } from "@react-email/img";
+import { Column, Container, Heading, Html, Img, Link, Row, Section } from "@react-email/components";
 import { render } from "@react-email/render";
 import { createHash } from "crypto";
 import { EMAIL_RX } from "~/automations/providers/definitions/email/shared";
