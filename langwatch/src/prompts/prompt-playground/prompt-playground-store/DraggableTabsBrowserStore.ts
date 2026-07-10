@@ -1,5 +1,5 @@
 "use client";
-import cloneDeep from "lodash.clonedeep";
+import { cloneDeep } from "lodash-es";
 import type { DeepPartial } from "react-hook-form";
 import { z } from "zod";
 import { create } from "zustand";
