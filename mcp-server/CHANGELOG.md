@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.10.2](https://github.com/langwatch/langwatch/compare/mcp-server@v0.10.1...mcp-server@v0.10.2) (2026-07-11)
+
+
+### Bug Fixes
+
+* **deps:** uv security sweep across langevals, mcp-server, python-sdk ([#4687](https://github.com/langwatch/langwatch/issues/4687)) ([7eba1fb](https://github.com/langwatch/langwatch/commit/7eba1fbec1cf01b7929b35529c41f5b089070263))
+* **docs:** replace crashing "@langwatch/mcp-server" JSON snippets with prose ([#3109](https://github.com/langwatch/langwatch/issues/3109)) ([#3995](https://github.com/langwatch/langwatch/issues/3995)) ([49ef059](https://github.com/langwatch/langwatch/commit/49ef05992c412a8ddf121650c6218a19aa9e3922))
+* **mcp-server:** bump vitest to 4.1.8 for SNYK-JS-VITEST-17375131 ([#5379](https://github.com/langwatch/langwatch/issues/5379)) ([f495f35](https://github.com/langwatch/langwatch/commit/f495f35e385db610bdfbd235992dbcf18df8b1eb))
+* **security:** bump pyjwt to 2.13.0 in mcp-server and python-sdk ([#4853](https://github.com/langwatch/langwatch/issues/4853)) ([9908168](https://github.com/langwatch/langwatch/commit/990816828a8dbaaafd9fbec2f60fda682080e63b))
+* **security:** bump Python infra deps (cryptography, tornado, python-multipart, aiohttp) ([#4873](https://github.com/langwatch/langwatch/issues/4873)) ([7488bc5](https://github.com/langwatch/langwatch/commit/7488bc5a088ce12c2de13f1a2472afc1b9bdb6a4))
+* **security:** bump starlette to 1.3.1 across uv workspaces ([#5019](https://github.com/langwatch/langwatch/issues/5019)) ([dc03945](https://github.com/langwatch/langwatch/commit/dc0394579b59f2f4a81da283f34a6478a501b1b0))
+* **security:** esbuild, vite and form-data floors across all workspaces ([361b301](https://github.com/langwatch/langwatch/commit/361b3014f62257e7cb2702e60588fc534a271d20))
+* **security:** esbuild, vite and form-data security floors across all workspaces ([#4827](https://github.com/langwatch/langwatch/issues/4827)) ([361b301](https://github.com/langwatch/langwatch/commit/361b3014f62257e7cb2702e60588fc534a271d20))
+* **security:** raise hono and undici floors across npm workspaces ([#5071](https://github.com/langwatch/langwatch/issues/5071)) ([5b5d57a](https://github.com/langwatch/langwatch/commit/5b5d57ac59baa38e90f9db82f3c213a26262bce4))
+* **security:** raise litellm to &gt;=1.84.0 in mcp-server and python-sdk ([cb44747](https://github.com/langwatch/langwatch/commit/cb447477d21feb9448445505bbe088f4b54776dc))
+* **security:** raise litellm to &gt;=1.84.0 in mcp-server and python-sdk (CRITICAL) ([#5230](https://github.com/langwatch/langwatch/issues/5230)) ([cb44747](https://github.com/langwatch/langwatch/commit/cb447477d21feb9448445505bbe088f4b54776dc))
+* **security:** raise protobufjs override floor to &gt;=8.6.0 ([#4852](https://github.com/langwatch/langwatch/issues/4852)) ([77ce842](https://github.com/langwatch/langwatch/commit/77ce84205d28275021b02a5bb0c320b6947dd934))
+
+
+### Miscellaneous
+
+* **deps-dev:** bump @anthropic-ai/claude-code ([acb7ce4](https://github.com/langwatch/langwatch/commit/acb7ce41ac1ec574ed8b1a78aeddd4867246ee5c))
+* **deps-dev:** bump @anthropic-ai/claude-code from 2.1.158 to 2.1.163 in /mcp-server in the npm_and_yarn group across 1 directory ([#4995](https://github.com/langwatch/langwatch/issues/4995)) ([acb7ce4](https://github.com/langwatch/langwatch/commit/acb7ce41ac1ec574ed8b1a78aeddd4867246ee5c))
+* **deps-dev:** bump @anthropic-ai/claude-code from 2.1.163 to 2.1.195 in /mcp-server ([#5376](https://github.com/langwatch/langwatch/issues/5376)) ([5ff4826](https://github.com/langwatch/langwatch/commit/5ff4826214587a6aed784a69578062ab12fd9df1))
+* **deps-dev:** bump @anthropic-ai/claude-code in /mcp-server ([5ff4826](https://github.com/langwatch/langwatch/commit/5ff4826214587a6aed784a69578062ab12fd9df1))
+* **deps-dev:** bump @langwatch/scenario from 0.4.11 to 0.4.15 in /mcp-server ([#5338](https://github.com/langwatch/langwatch/issues/5338)) ([de74e61](https://github.com/langwatch/langwatch/commit/de74e6183244683b650105eea70dda5fe4bda4a4))
+* **deps-dev:** bump @langwatch/scenario in /mcp-server ([de74e61](https://github.com/langwatch/langwatch/commit/de74e6183244683b650105eea70dda5fe4bda4a4))
+* **deps-dev:** bump @types/eslint__js from 8.42.3 to 9.14.0 in /langwatch ([#4605](https://github.com/langwatch/langwatch/issues/4605)) ([b937610](https://github.com/langwatch/langwatch/commit/b937610ea11752f5a07aa111da07e9dd7bbaa9f8))
+* **deps-dev:** bump @typescript/native-preview from 7.0.0-dev.20250911.1 to 7.0.0-dev.20260628.1 in /mcp-server ([#5373](https://github.com/langwatch/langwatch/issues/5373)) ([1ac876f](https://github.com/langwatch/langwatch/commit/1ac876fe55f2c73452c82b9a4219e52980dda9d2))
+* **deps-dev:** bump @typescript/native-preview to 7.0.0-dev.20260628.1 in /mcp-server ([1ac876f](https://github.com/langwatch/langwatch/commit/1ac876fe55f2c73452c82b9a4219e52980dda9d2))
+* **deps-dev:** bump eslint from 10.4.1 to 10.6.0 in /mcp-server ([#5372](https://github.com/langwatch/langwatch/issues/5372)) ([78244c1](https://github.com/langwatch/langwatch/commit/78244c197c8000cb7358f19f7cdcf7e07e93231e))
+* **deps-dev:** bump the typescript-native-preview group across 3 directories with 1 update ([#5721](https://github.com/langwatch/langwatch/issues/5721)) ([6e44614](https://github.com/langwatch/langwatch/commit/6e44614f5b193cf959203bb32e357cc7407e4b16))
+* **deps-dev:** bump tsx from 4.22.3 to 4.22.4 in /mcp-server ([#4779](https://github.com/langwatch/langwatch/issues/4779)) ([1e8e538](https://github.com/langwatch/langwatch/commit/1e8e538e57e0096957439a4146a5eea480df3e93))
+* **deps-dev:** bump typescript-eslint from 8.60.0 to 8.62.0 in /mcp-server ([#4880](https://github.com/langwatch/langwatch/issues/4880)) ([5773c2d](https://github.com/langwatch/langwatch/commit/5773c2db77634313075eb58e94190e0d7c146577))
+* **deps-dev:** bump typescript-eslint from 8.62.0 to 8.62.1 in /mcp-server ([#5478](https://github.com/langwatch/langwatch/issues/5478)) ([9250768](https://github.com/langwatch/langwatch/commit/92507686d7d519691b8d53a625c4a67374ded313))
+* **deps-dev:** bump typescript-eslint in /mcp-server ([9250768](https://github.com/langwatch/langwatch/commit/92507686d7d519691b8d53a625c4a67374ded313))
+* **deps-dev:** bump typescript-eslint in /mcp-server ([5773c2d](https://github.com/langwatch/langwatch/commit/5773c2db77634313075eb58e94190e0d7c146577))
+* **deps-dev:** remove redundant @types/eslint__js in /mcp-server ([b937610](https://github.com/langwatch/langwatch/commit/b937610ea11752f5a07aa111da07e9dd7bbaa9f8))
+* **deps:** batch small dependency updates in /langwatch + /mcp-server ([#5447](https://github.com/langwatch/langwatch/issues/5447)) ([daed7b1](https://github.com/langwatch/langwatch/commit/daed7b1325fc06b70c0739849d27280a8a4f6c9c))
+* **deps:** bump @modelcontextprotocol/sdk from 1.26.0 to 1.29.0 in /langwatch ([#4607](https://github.com/langwatch/langwatch/issues/4607)) ([08f2ce6](https://github.com/langwatch/langwatch/commit/08f2ce6b50877edf35ec524e1524afdbb5de53b0))
+* **deps:** bump @opentelemetry/context-async-hooks from 2.7.1 to 2.8.0 in /mcp-server ([#5033](https://github.com/langwatch/langwatch/issues/5033)) ([1506b70](https://github.com/langwatch/langwatch/commit/1506b701e999bc779190bff988942927537cffd1))
+* **deps:** bump @opentelemetry/context-async-hooks in /mcp-server ([1506b70](https://github.com/langwatch/langwatch/commit/1506b701e999bc779190bff988942927537cffd1))
+* **deps:** bump @opentelemetry/sdk-node from 0.217.0 to 0.219.0 in /mcp-server ([#5048](https://github.com/langwatch/langwatch/issues/5048)) ([9f1ef55](https://github.com/langwatch/langwatch/commit/9f1ef5572a9cca3114e583b4a319fb3ec416e080))
+* **deps:** bump @opentelemetry/sdk-node in /mcp-server ([9f1ef55](https://github.com/langwatch/langwatch/commit/9f1ef5572a9cca3114e583b4a319fb3ec416e080))
+* **deps:** bump vitest ([c609e83](https://github.com/langwatch/langwatch/commit/c609e83429ec60da17dac0b69edf09ed9cec99d4))
+* **deps:** bump vitest from 3.2.4 to 4.1.0 in /mcp-server in the npm_and_yarn group across 1 directory ([#4479](https://github.com/langwatch/langwatch/issues/4479)) ([c609e83](https://github.com/langwatch/langwatch/commit/c609e83429ec60da17dac0b69edf09ed9cec99d4))
+* **deps:** bump vitest from 4.1.0 to 4.1.9 in /mcp-server ([#4784](https://github.com/langwatch/langwatch/issues/4784)) ([efe348f](https://github.com/langwatch/langwatch/commit/efe348f4b4e4836f7b27d5ab32673a5bc77323a2))
+* **deps:** bump yargs from 17.7.2 to 18.0.0 in /mcp-server ([#4307](https://github.com/langwatch/langwatch/issues/4307)) ([dddc31d](https://github.com/langwatch/langwatch/commit/dddc31d6901a4d7fc91ea25fe442810dacdbda67))
+
+
+### Code Refactoring
+
+* **types:** make zod the single source of truth, remove ts-to-zod ([#4651](https://github.com/langwatch/langwatch/issues/4651)) ([d583fbe](https://github.com/langwatch/langwatch/commit/d583fbe2ed2ca2ef320695323c17f6c362ea4efa))
+
 ## [0.10.1](https://github.com/langwatch/langwatch/compare/mcp-server@v0.10.0...mcp-server@v0.10.1) (2026-05-31)
 
 
