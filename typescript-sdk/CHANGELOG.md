@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.34.1](https://github.com/langwatch/langwatch/compare/typescript-sdk@v0.34.0...typescript-sdk@v0.34.1) (2026-07-11)
+
+
+### Bug Fixes
+
+* **security:** raise js-yaml and dompurify override floors (langwatch, skills, mastra example) ([bc79476](https://github.com/langwatch/langwatch/commit/bc79476fd684208745f4afb083fd5faa954ea79d))
+* **security:** raise js-yaml and dompurify override floors across JS workspaces ([#5364](https://github.com/langwatch/langwatch/issues/5364)) ([bc79476](https://github.com/langwatch/langwatch/commit/bc79476fd684208745f4afb083fd5faa954ea79d))
+* **security:** raise python-sdk bleach and onnx transitive floors ([#5542](https://github.com/langwatch/langwatch/issues/5542)) ([6abdc66](https://github.com/langwatch/langwatch/commit/6abdc6608ca8414a789e81e2b3c6f2aa42e03095))
+
+
+### Miscellaneous
+
+* **deps-dev:** bump the typescript-native-preview group across 3 directories with 1 update ([#5721](https://github.com/langwatch/langwatch/issues/5721)) ([6e44614](https://github.com/langwatch/langwatch/commit/6e44614f5b193cf959203bb32e357cc7407e4b16))
+* **deps-dev:** bump the vitest group across 1 directory with 2 updates ([#5681](https://github.com/langwatch/langwatch/issues/5681)) ([ec90589](https://github.com/langwatch/langwatch/commit/ec90589907bfe703bc0907ce42cafa87f5b03945))
+
 ## [0.34.0](https://github.com/langwatch/langwatch/compare/typescript-sdk@v0.33.2...typescript-sdk@v0.34.0) (2026-07-08)
 
 
