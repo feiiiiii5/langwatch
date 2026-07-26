@@ -214,6 +214,8 @@ const SUMMARY_SPAN_SELECT = `
   SpanAttributes['gen_ai.usage.output_tokens'] AS OutputTokens,
   SpanAttributes['gen_ai.usage.cache_read.input_tokens'] AS CacheReadTokens,
   SpanAttributes['gen_ai.usage.cache_creation.input_tokens'] AS CacheCreationTokens,
+  SpanAttributes['gen_ai.usage.input_chars'] AS InputChars,
+  SpanAttributes['gen_ai.usage.audio_seconds'] AS AudioSeconds,
   SpanAttributes['langwatch.model.inputCostPerToken'] AS CustomInputRate,
   SpanAttributes['langwatch.model.outputCostPerToken'] AS CustomOutputRate,
   SpanAttributes['langwatch.model.cacheReadCostPerToken'] AS CustomCacheReadRate,
@@ -356,6 +358,8 @@ export interface SpanSummaryQueryRow {
   OutputTokens: string;
   CacheReadTokens: string;
   CacheCreationTokens: string;
+  InputChars: string;
+  AudioSeconds: string;
   CustomInputRate: string;
   CustomOutputRate: string;
   CustomCacheReadRate: string;
@@ -408,6 +412,8 @@ export function mapSpanSummaryRow(row: SpanSummaryQueryRow): SpanSummaryRow {
           row.CacheReadTokens || undefined,
         [ATTR_KEYS.GEN_AI_USAGE_CACHE_CREATION_INPUT_TOKENS]:
           row.CacheCreationTokens || undefined,
+        [ATTR_KEYS.GEN_AI_USAGE_INPUT_CHARS]: row.InputChars || undefined,
+        [ATTR_KEYS.GEN_AI_USAGE_AUDIO_SECONDS]: row.AudioSeconds || undefined,
         [ATTR_KEYS.LANGWATCH_MODEL_INPUT_COST_PER_TOKEN]:
           row.CustomInputRate || undefined,
         [ATTR_KEYS.LANGWATCH_MODEL_OUTPUT_COST_PER_TOKEN]:
@@ -544,8 +550,11 @@ function validateStatusCode(value: number | null): NormalizedStatusCode | null {
 /**
  * Ensures a ClickHouse Map(String, String) value is actually Record<string, string>.
  * Non-string values are dropped with a warning.
+ *
+ * Exported so every stored_spans read path shares the same row decoding.
+ * Pair with {@link deserializeAttributes}.
  */
-function ensureStringRecord(
+export function ensureStringRecord(
   raw: Record<string, unknown>,
 ): Record<string, string> {
   const result: Record<string, string> = {};

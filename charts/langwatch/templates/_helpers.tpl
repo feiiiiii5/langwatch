@@ -432,6 +432,19 @@ app.kubernetes.io/instance: {{ .Release.Name }}
   {{- if ne $gwSecretName $appSecretName }}
     {{- $errors = append $errors (printf "gateway.secrets.existingSecretName (%q) must equal the app Secret name (%q). this release collapsed gateway-auth into the app Secret so both langwatch-app and the gateway pod mount the same Secret. Either drop the secrets.existingSecret / autogen.secretNames.app override to use the langwatch-app-secrets default, or set gateway.secrets.existingSecretName to %q so both pods agree." $gwSecretName $appSecretName $appSecretName) }}
   {{- end }}
+
+  {{/* The gateway derives its route to the control plane as
+       `<release>-app:5560` when nothing is set. The release half always
+       matches, since the app Service is named after it. The port half is a
+       constant the subchart cannot see past, so an app moved to another port
+       would leave the gateway dialling a closed one — a install that comes up
+       entirely healthy and then refuses every request that carries a virtual
+       key. Stop instead, and name the value that fixes it. */}}
+  {{- $gwBaseUrl := (($gw.controlPlane) | default dict).baseUrl | default "" }}
+  {{- $appPort := ((.Values.app.service) | default dict).port | default 5560 }}
+  {{- if and (not $gwBaseUrl) (ne (int $appPort) 5560) }}
+    {{- $errors = append $errors (printf "app.service.port is %v, but the gateway works out where the control plane is on its own and can only assume the default port 5560. It would dial http://%s-app:5560 and get nothing, and the install would come up healthy while refusing every request that carries a virtual key. Set gateway.controlPlane.baseUrl to http://%s-app:%v." $appPort .Release.Name .Release.Name $appPort) }}
+  {{- end }}
 {{- end }}
 
 {{/* Validate Langy agent secret wiring.
@@ -464,7 +477,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
        terraform); only the untouched default is treated as an oversight. */}}
   {{- $appSecretName := include "langwatch.appSecretName" . }}
   {{- if and (ne $appSecretName "langwatch-app-secrets") (eq ($langySecrets.existingSecretName | default "") "langwatch-app-secrets") }}
-    {{- $errors = append $errors (printf "langyagent.secrets.existingSecretName is still the default %q but the app Secret is named %q. The app, the workers, and the agent pod would all mount a Secret this install does not have. Set langyagent.secrets.existingSecretName to %q, or to whichever Secret holds %s." "langwatch-app-secrets" $appSecretName $appSecretName $langyKey) }}
+    {{- $errors = append $errors (printf "langyagent.secrets.existingSecretName is still the default %q but the app Secret is named %q. The app, the workers, and the agent pod would all mount a Secret this install does not have. Set langyagent.secrets.existingSecretName to %q, or to whichever Secret holds %s (the same mirroring the gateway subchart needs). To run without the Langy assistant instead, set langyagent.chartManaged=false." "langwatch-app-secrets" $appSecretName $appSecretName $langyKey) }}
   {{- end }}
   {{/* A configured key that collides with one of the app Secret's own keys would
        emit the same Secret.data entry twice, and the second write wins — Langy's
