@@ -1,6 +1,5 @@
 import { createLogger } from "@langwatch/observability";
 import type { EventSourcing } from "../event-sourcing/eventSourcing";
-import { outboxHeartbeatRegistry } from "../event-sourcing/outbox/heartbeat/heartbeat.registry";
 import type { AppCommands } from "../event-sourcing/pipelineRegistry";
 import type { AppConfig } from "./config";
 import type {
@@ -24,6 +23,11 @@ export class App {
   readonly simulations: AppDependencies["simulations"] &
     AppCommands["simulations"];
   readonly suiteRuns: AppDependencies["suiteRuns"] & AppCommands["suiteRuns"];
+  readonly topicClustering: AppDependencies["topicClustering"] &
+    AppCommands["topicClustering"];
+  readonly codingAgents: AppDependencies["codingAgents"] &
+    AppCommands["codingAgents"];
+  readonly commands: AppCommands;
   readonly langy: AppDependencies["langy"];
   readonly experiments: AppDependencies["experiments"];
   readonly triggers: AppDependencies["triggers"];
@@ -44,6 +48,7 @@ export class App {
   readonly retentionPolicyCache: AppDependencies["retentionPolicyCache"];
   readonly dataRetention: DataRetentionDependencies;
   readonly share: AppDependencies["share"];
+  readonly sharedTraceCache: AppDependencies["sharedTraceCache"];
 
   /** Keeps EventSourcing infrastructure safe from the greedy garbage men */
   private readonly _eventSourcing?: EventSourcing;
@@ -81,11 +86,21 @@ export class App {
     this.dspySteps = deps.dspySteps;
     this.simulations = { ...deps.simulations, ...deps.commands.simulations };
     this.suiteRuns = { ...deps.suiteRuns, ...deps.commands.suiteRuns };
+    this.topicClustering = {
+      ...deps.topicClustering,
+      ...deps.commands.topicClustering,
+    };
+    this.codingAgents = {
+      ...deps.codingAgents,
+      ...deps.commands.codingAgents,
+    };
+    this.commands = deps.commands;
     this.langy = deps.langy;
     this.ops = deps.ops;
     this.retentionPolicyCache = deps.retentionPolicyCache;
     this.dataRetention = deps.dataRetention;
     this.share = deps.share;
+    this.sharedTraceCache = deps.sharedTraceCache;
     this._eventSourcing = deps._eventSourcing;
     this._gracefulCloseables = deps._gracefulCloseables ?? [];
   }
@@ -144,8 +159,4 @@ export async function resetApp(): Promise<void> {
   if (existing) {
     await existing.close();
   }
-  // The heartbeat registry is a module singleton, so it outlives the App it
-  // was populated from. Leaving it populated makes the next worker-role
-  // `initializeDefaultApp()` throw on re-registration.
-  outboxHeartbeatRegistry.clear();
 }

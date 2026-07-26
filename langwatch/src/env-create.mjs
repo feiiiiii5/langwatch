@@ -13,10 +13,91 @@ export const gatewaySecretsSchema = {
   LW_VIRTUAL_KEY_PEPPER: z.string().min(32).optional(),
 };
 
+/**
+ * Share of browser *sessions* recorded, 0..1. Sessions rather than traces so a
+ * recorded visit is complete; the decision also reaches the server, which drops
+ * the backend half of an unsampled browser trace. Defaults to all of them.
+ * See ADR-058.
+ *
+ * Blank in .env means "unset" — without the preprocess, `z.coerce` turns `""`
+ * into 0 and silently records nothing.
+ *
+ * A meaningless value falls back to recording everything rather than failing
+ * validation. Without the `catch`, `RUM_SAMPLE_RATIO=banana` (or `2`) refuses to
+ * parse and takes the whole app down at boot — an optional telemetry dial is not
+ * worth a deployment for, and the safe reading of nonsense is "record
+ * everything", per the spec scenario "A nonsensical share records rather than
+ * silently collecting nothing". An explicit `0` still means zero; only
+ * unparseable and out-of-range values land on the fallback.
+ *
+ * Exported so tests exercise the real schema rather than an inline copy.
+ */
+export const rumSampleRatioSchema = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.coerce.number().min(0).max(1).default(1).catch(1),
+);
+
 /** @param {import('zod').ZodTypeAny} schema */
 const optionalIfBuildTime = (schema) => {
   return process.env.BUILD_TIME ? schema.optional() : schema;
 };
+
+/**
+ * `BASE_HOST` / `NEXTAUTH_URL` are the app's own address. Every state-changing
+ * `/api/auth/*` call is matched against it (`server/routes/auth.ts` via
+ * `better-auth/originGate.ts`, and BetterAuth's own `baseURL` + `trustedOrigins`
+ * in `better-auth/index.ts`), so a value naming the wrong port turns every
+ * sign-in into `403 INVALID_ORIGIN`.
+ *
+ * In development the port is not knowable ahead of time: `.env` is committed
+ * with the default 5560 and a second checkout runs on whatever slot is free.
+ * `scripts/start.sh` exports the aligned value, but the entry points load `.env`
+ * with `override: true` afterwards (deliberately, so an explicitly pinned
+ * `LW_GATEWAY_PUBLIC_URL` and friends beat the launcher's derived defaults), and
+ * that puts 5560 back. Realigning here, after every `.env` file has loaded, is
+ * what makes the alignment stick, and it leaves every other `.env`-pinned value
+ * untouched.
+ *
+ * Only a plain `http://localhost:<port>` is treated as stale. Anything else is
+ * someone's deliberate setup: `127.0.0.1`, a proxy in front of a preview
+ * environment, a tunnel, or haven's `app.<slug>.langwatch.localhost`. Same rule
+ * as the shell-side twin `scripts/lib/sanitize-dev-env.sh`, which covers the
+ * Docker launchers.
+ *
+ * Mutates the env object so direct `process.env.BASE_HOST` readers (the MCP
+ * handler, the SSR API base, the scenario-events app) see the same address the
+ * auth layer does.
+ *
+ * @param {Record<string, string | undefined>} [processEnv]
+ * @returns {{ name: string, from: string, to: string }[]} the vars it realigned
+ */
+export function alignDevAuthUrlsToPort(processEnv = process.env) {
+  if (processEnv.NODE_ENV !== "development") return [];
+
+  const port = processEnv.LANGWATCH_APP_PORT ?? processEnv.PORT;
+  if (!port) return [];
+
+  const target = `http://localhost:${port}`;
+  const realigned = [];
+
+  for (const name of ["BASE_HOST", "NEXTAUTH_URL"]) {
+    const current = processEnv[name];
+    if (!current || current === target) continue;
+
+    let parsed;
+    try {
+      parsed = new URL(current);
+    } catch {
+      continue;
+    }
+    if (parsed.protocol !== "http:" || parsed.hostname !== "localhost") continue;
+
+    processEnv[name] = target;
+    realigned.push({ name, from: current, to: target });
+  }
+
+  return realigned;
+}
 
 // Memoize so double calls (env.mjs root + createAppConfigFromEnv) only validate once
 /** @type {any} */
@@ -24,6 +105,10 @@ let _env = null;
 
 export function createEnvConfig() {
   if (_env) return _env;
+
+  // Runs before validation reads process.env below, and every entry point loads
+  // its .env files before the app graph (and therefore this module) evaluates.
+  alignDevAuthUrlsToPort();
 
   _env = createEnv({
     // clientPrefix required by env-core to distinguish client/server vars
@@ -34,14 +119,19 @@ export function createEnvConfig() {
       DATABASE_URL: optionalIfBuildTime(z.string().url()),
       CLICKHOUSE_URL: z.string().url().optional(),
       NODE_ENV: z.enum(["development", "test", "production"]),
-      ENVIRONMENT: z.string().optional().transform((val) => {
-        if (val) return val;
-        if (process.env.NODE_ENV === "production") {
-          console.warn("ENVIRONMENT is not set in production. Defaulting to 'local'.");
-        }
+      ENVIRONMENT: z
+        .string()
+        .optional()
+        .transform((val) => {
+          if (val) return val;
+          if (process.env.NODE_ENV === "production") {
+            console.warn(
+              "ENVIRONMENT is not set in production. Defaulting to 'local'.",
+            );
+          }
 
-        return "local";
-      }),
+          return "local";
+        }),
       BASE_HOST: optionalIfBuildTime(z.string().min(1)),
       NEXTAUTH_PROVIDER: z.string().optional(),
       NEXTAUTH_SECRET: optionalIfBuildTime(z.string().min(1)),
@@ -69,7 +159,8 @@ export function createEnvConfig() {
       API_TOKEN_JWT_SECRET: optionalIfBuildTime(z.string().min(1)),
       // Shared HMAC secret between control-plane and the Go AI Gateway service.
       // See specs/ai-gateway/_shared/contract.md §4 + §9.
-      LW_GATEWAY_INTERNAL_SECRET: gatewaySecretsSchema.LW_GATEWAY_INTERNAL_SECRET,
+      LW_GATEWAY_INTERNAL_SECRET:
+        gatewaySecretsSchema.LW_GATEWAY_INTERNAL_SECRET,
       // HS256 secret used by control-plane to sign the short-lived JWT that the
       // gateway verifies on every request (contract §4.1). 32+ chars.
       LW_GATEWAY_JWT_SECRET: gatewaySecretsSchema.LW_GATEWAY_JWT_SECRET,
@@ -130,10 +221,26 @@ export function createEnvConfig() {
       // LANGEVALS_STAGING_TTL_SECONDS bounds how long the presigned URL
       // stays valid; keep it short so a leaked URL doesn't grant
       // long-window access.
-      LANGEVALS_STAGING_THRESHOLD_BYTES: z.coerce.number().int().positive().optional(),
-      LANGEVALS_STAGING_TTL_SECONDS: z.coerce.number().int().positive().default(600),
-      EVAL_MAX_PAYLOAD_BYTES: z.coerce.number().int().positive().default(16_000_000),
-      TOPIC_CLUSTERING_MAX_PAYLOAD_BYTES: z.coerce.number().int().positive().default(180_000_000),
+      LANGEVALS_STAGING_THRESHOLD_BYTES: z.coerce
+        .number()
+        .int()
+        .positive()
+        .optional(),
+      LANGEVALS_STAGING_TTL_SECONDS: z.coerce
+        .number()
+        .int()
+        .positive()
+        .default(600),
+      EVAL_MAX_PAYLOAD_BYTES: z.coerce
+        .number()
+        .int()
+        .positive()
+        .default(16_000_000),
+      TOPIC_CLUSTERING_MAX_PAYLOAD_BYTES: z.coerce
+        .number()
+        .int()
+        .positive()
+        .default(180_000_000),
       // ADR-031: per-trigger hourly hard cap on dispatched trigger emails.
       // Counts dispatches (one digest of N traces = 1), not traces or
       // recipients. Only ever bites immediate-cadence triggers; digest
@@ -156,6 +263,12 @@ export function createEnvConfig() {
       EMAIL_DEFAULT_FROM: z.string().optional(),
       S3_KEY_SALT: z.string().optional(),
       IS_SAAS: z.boolean().optional(),
+      // Browser tracing (ADR-058). Off unless explicitly enabled: it adds
+      // frontend telemetry volume, and the ingest route it exports to is
+      // inert without OTEL_EXPORTER_OTLP_ENDPOINT anyway.
+      RUM_ENABLED: z.boolean().optional(),
+      // See `rumSampleRatioSchema` above.
+      RUM_SAMPLE_RATIO: rumSampleRatioSchema,
       // Controls SSRF blocking for outbound HTTP calls (TS proxy + scenario
       // runner; mirrored on the Python NLP side via the same env name). When
       // true: private IPs, localhost, and hostnames resolving to private IPs
@@ -300,6 +413,10 @@ export function createEnvConfig() {
       SLACK_PLAN_LIMIT_CHANNEL: z.string().optional(),
       SLACK_CHANNEL_SIGNUPS: z.string().optional(),
       SLACK_CHANNEL_SUBSCRIPTIONS: z.string().optional(),
+      // Agent issue-report alerts (bot token of the LangWatch Agents Slack
+      // app; alerts are skipped entirely when unset)
+      SLACK_BUG_REPORTS_BOT_TOKEN: z.string().optional(),
+      SLACK_BUG_REPORTS_CHANNEL: z.string().optional(),
 
       // SCIM
       AUTH0_SCIM_WEBHOOK_SECRET: z.string().optional(),
@@ -331,7 +448,8 @@ export function createEnvConfig() {
       REDIS_URL: process.env.REDIS_URL,
       REDIS_CLUSTER_ENDPOINTS: process.env.REDIS_CLUSTER_ENDPOINTS,
       REDIS_DB_INDEX: process.env.REDIS_DB_INDEX,
-      GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      GOOGLE_APPLICATION_CREDENTIALS:
+        process.env.GOOGLE_APPLICATION_CREDENTIALS,
       AZURE_OPENAI_ENDPOINT: process.env.AZURE_OPENAI_ENDPOINT,
       AZURE_OPENAI_KEY: process.env.AZURE_OPENAI_KEY,
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
@@ -339,10 +457,12 @@ export function createEnvConfig() {
       LANGWATCH_NLP_SERVICE: process.env.LANGWATCH_NLP_SERVICE,
       LANGWATCH_ENDPOINT: process.env.LANGWATCH_ENDPOINT,
       LANGEVALS_ENDPOINT: process.env.LANGEVALS_ENDPOINT,
-      LANGEVALS_STAGING_THRESHOLD_BYTES: process.env.LANGEVALS_STAGING_THRESHOLD_BYTES,
+      LANGEVALS_STAGING_THRESHOLD_BYTES:
+        process.env.LANGEVALS_STAGING_THRESHOLD_BYTES,
       LANGEVALS_STAGING_TTL_SECONDS: process.env.LANGEVALS_STAGING_TTL_SECONDS,
       EVAL_MAX_PAYLOAD_BYTES: process.env.EVAL_MAX_PAYLOAD_BYTES,
-      TOPIC_CLUSTERING_MAX_PAYLOAD_BYTES: process.env.TOPIC_CLUSTERING_MAX_PAYLOAD_BYTES,
+      TOPIC_CLUSTERING_MAX_PAYLOAD_BYTES:
+        process.env.TOPIC_CLUSTERING_MAX_PAYLOAD_BYTES,
       TRIGGER_EMAIL_HOURLY_CAP: process.env.TRIGGER_EMAIL_HOURLY_CAP,
       TRIGGER_EMAIL_TENANT_DAILY_CAP:
         process.env.TRIGGER_EMAIL_TENANT_DAILY_CAP,
@@ -356,6 +476,10 @@ export function createEnvConfig() {
       IS_SAAS:
         process.env.IS_SAAS === "1" ||
         process.env.IS_SAAS?.toLowerCase() === "true",
+      RUM_ENABLED:
+        process.env.RUM_ENABLED === "1" ||
+        process.env.RUM_ENABLED?.toLowerCase() === "true",
+      RUM_SAMPLE_RATIO: process.env.RUM_SAMPLE_RATIO,
       BLOCK_LOCAL_HTTP_CALLS:
         process.env.BLOCK_LOCAL_HTTP_CALLS === "1" ||
         process.env.BLOCK_LOCAL_HTTP_CALLS?.toLowerCase() === "true",
@@ -417,8 +541,10 @@ export function createEnvConfig() {
       LANGWATCH_LICENSE_PRIVATE_KEY: process.env.LANGWATCH_LICENSE_PRIVATE_KEY,
       STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
       STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
-      STRIPE_LICENSE_PAYMENT_LINK_ID: process.env.STRIPE_LICENSE_PAYMENT_LINK_ID,
-      STRIPE_LICENSE_PAYMENT_LINK_URL: process.env.STRIPE_LICENSE_PAYMENT_LINK_URL,
+      STRIPE_LICENSE_PAYMENT_LINK_ID:
+        process.env.STRIPE_LICENSE_PAYMENT_LINK_ID,
+      STRIPE_LICENSE_PAYMENT_LINK_URL:
+        process.env.STRIPE_LICENSE_PAYMENT_LINK_URL,
       ADMIN_EMAILS: process.env.ADMIN_EMAILS,
       HUBSPOT_PORTAL_ID: process.env.HUBSPOT_PORTAL_ID,
       HUBSPOT_REACHED_LIMIT_FORM_ID: process.env.HUBSPOT_REACHED_LIMIT_FORM_ID,
@@ -426,6 +552,8 @@ export function createEnvConfig() {
       CUSTOMER_IO_API_KEY: process.env.CUSTOMER_IO_API_KEY,
       CUSTOMER_IO_REGION: process.env.CUSTOMER_IO_REGION,
       SLACK_PLAN_LIMIT_CHANNEL: process.env.SLACK_PLAN_LIMIT_CHANNEL,
+      SLACK_BUG_REPORTS_BOT_TOKEN: process.env.SLACK_BUG_REPORTS_BOT_TOKEN,
+      SLACK_BUG_REPORTS_CHANNEL: process.env.SLACK_BUG_REPORTS_CHANNEL,
       SLACK_CHANNEL_SIGNUPS: process.env.SLACK_CHANNEL_SIGNUPS,
       SLACK_CHANNEL_SUBSCRIPTIONS: process.env.SLACK_CHANNEL_SUBSCRIPTIONS,
       AUTH0_SCIM_WEBHOOK_SECRET: process.env.AUTH0_SCIM_WEBHOOK_SECRET,

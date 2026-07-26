@@ -1,8 +1,10 @@
 import type { ModelProvider } from "@prisma/client";
 import { z } from "zod";
+import { codexTokenKeysSchema } from "./codexAccount.schema";
+import { CODEX_ALLOWED_FEATURE_KEYS } from "./codexRestrictions";
 import type { CustomModelEntry } from "./customModel.schema";
-import { llmModels } from "./loadModelCatalog";
 import type { LLMModelEntry } from "./llmModels.types";
+import { llmModels } from "./loadModelCatalog";
 
 // ============================================================================
 // Parameter Constraint Types
@@ -47,6 +49,21 @@ type ModelProviderDefinition = {
    * truth for which fields render the muted "optional" affordance.
    */
   optionalKeys?: string[];
+  /**
+   * How the provider is credentialed. "api-key" (the default) renders the
+   * schema's fields as inputs; "oauth-device" replaces them with a
+   * sign-in-with-the-provider flow — the customKeys then hold the OAuth
+   * token set rather than anything the user typed.
+   */
+  authFlow?: "api-key" | "oauth-device";
+  /**
+   * When set, this provider's models may only serve the listed feature keys
+   * (plus nothing else): pickers on other surfaces hide them and execution
+   * paths reject them. Used by providers whose upstream terms limit usage,
+   * e.g. the Codex plan backend is licensed for coding-assistant surfaces
+   * only. Absent = unrestricted. See allowedCodexFeatures.ts.
+   */
+  restrictedToFeatureKeys?: readonly string[];
 };
 
 export type MaybeStoredModelProvider = Omit<
@@ -239,6 +256,18 @@ export const modelProviders = {
     blurb:
       "Use this option for LiteLLM proxy, self-hosted vLLM or any other model providers that supports the /chat/completions endpoint.",
   },
+  openai_codex: {
+    name: "Codex (OpenAI account)",
+    type: "llm",
+    apiKey: "CODEX_ACCESS_TOKEN",
+    endpointKey: undefined,
+    keysSchema: codexTokenKeysSchema,
+    authFlow: "oauth-device",
+    restrictedToFeatureKeys: CODEX_ALLOWED_FEATURE_KEYS,
+    enabledSince: new Date("2026-07-20"),
+    blurb:
+      "Sign in with your OpenAI account and Langy runs on your ChatGPT plan. Serves the coding-assistant surfaces only.",
+  },
   openai: {
     name: "OpenAI",
     type: "llm",
@@ -293,6 +322,22 @@ export const modelProviders = {
       GEMINI_API_KEY: z.string().min(1),
     }),
     enabledSince: new Date("2023-01-01"),
+  },
+  elevenlabs: {
+    name: "ElevenLabs",
+    // Ships audio only (TTS + STT through the gateway's /v1/audio routes).
+    // Registered like every provider so the key lives in Settings -> Model
+    // Providers; the LLM model catalog carries no elevenlabs chat models, so
+    // it never shows up in chat model selectors.
+    type: "llm",
+    apiKey: "ELEVENLABS_API_KEY",
+    endpointKey: undefined,
+    keysSchema: z.object({
+      ELEVENLABS_API_KEY: z.string().min(1),
+    }),
+    enabledSince: new Date("2026-07-25"),
+    blurb:
+      "Voice models for lifelike text to speech and accurate transcription.",
   },
   azure: {
     name: "Azure OpenAI",

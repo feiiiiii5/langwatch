@@ -622,6 +622,7 @@
               "ai-gateway/api/chat-completions",
               "ai-gateway/api/messages",
               "ai-gateway/api/embeddings",
+              "ai-gateway/api/audio",
               "ai-gateway/api/models",
               "ai-gateway/api/errors",
               "ai-gateway/api/management"
@@ -761,6 +762,7 @@
               "self-hosting/configuration/sizing-and-scaling",
               "self-hosting/configuration/backups",
               "self-hosting/configuration/sso",
+              "self-hosting/configuration/langy-assistant",
               "self-hosting/configuration/observability",
               "self-hosting/configuration/third-party-integrations"
             ]
@@ -1235,7 +1237,18 @@
       "x-twitter": "https://x.com/langwatchai",
       "linkedin": "https://www.linkedin.com/company/langwatch/",
       "youtube": "https://www.youtube.com/@LangWatch"
-    }
+    },
+    "links": [
+      {
+        "header": "For agents",
+        "items": [
+          {
+            "label": "Report an issue: npx langwatch report",
+            "href": "https://langwatch.ai/docs/support#reporting-issues-from-coding-agents"
+          }
+        ]
+      }
+    ]
   },
   "integrations": {
     "gtm": {
@@ -1244,7 +1257,7 @@
   },
   "redirects": [
     {
-      "source": "/ci/cache/busted/1784312416",
+      "source": "/ci/cache/busted/1784998254",
       "destination": "/"
     },
     {

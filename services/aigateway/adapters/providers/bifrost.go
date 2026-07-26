@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -36,13 +37,43 @@ type BifrostRouter struct {
 	// Voyage request so connection pooling actually works. Building a
 	// new http.Client per request would defeat keep-alive and risk
 	// port exhaustion under embedding throughput.
-	voyageClient *http.Client
+	voyageClient   *http.Client
+	endpointPolicy customerEndpointPolicy
+	// discoveryOnce lazily builds the /v1/models discovery client and
+	// cache. Lazy rather than constructor-built so a zero-value router
+	// (used by tests and by any caller that only needs discovery) works
+	// without a live Bifrost instance.
+	discoveryOnce   sync.Once
+	discoveryHTTP   *http.Client
+	discoveryModels *modelsDiscoveryCache
+	// codexClient streams against OpenAI's codex backend (no overall
+	// timeout — turns run for minutes; cancellation rides the context).
+	codexClient *http.Client
+	// codexRefresher is the control-plane road for refreshing a 401'd
+	// codex access token. Nil (e.g. in bare tests) degrades to reporting
+	// the session as expired instead of retrying.
+	codexRefresher  domain.CodexTokenRefresher
+	codexBackendURL string
 }
 
 // BifrostOptions configures the bifrost router.
 type BifrostOptions struct {
-	Logger          *zap.Logger
-	InitialPoolSize int
+	Logger                        *zap.Logger
+	InitialPoolSize               int
+	BlockLocalHTTPCalls           bool
+	RequireHTTPSCustomerEndpoints bool
+	AllowedEndpointHosts          []string
+	// CodexRefresher wires the control-plane token refresh for the codex
+	// provider (see adapters/providers/codex.go).
+	CodexRefresher domain.CodexTokenRefresher
+	// CodexBackendURL overrides the codex upstream (tests only).
+	CodexBackendURL string
+	// OpenAIBackendURL overrides OpenAI's upstream (tests only). A credential
+	// base_url reroutes to the vLLM chat-compat provider (see mapProvider);
+	// this override instead keeps the request on bifrost's native OpenAI
+	// provider, so tests can drive the real Responses stream pipeline against
+	// a local server.
+	OpenAIBackendURL string
 }
 
 // NewBifrostRouter creates a provider router backed by bifrost.
@@ -52,17 +83,29 @@ func NewBifrostRouter(ctx context.Context, opts BifrostOptions) (*BifrostRouter,
 		pool = 1000
 	}
 	bf, err := bifrost.Init(ctx, bfschemas.BifrostConfig{
-		Account:         &account{},
+		Account:         &account{openAIBaseURL: opts.OpenAIBackendURL},
 		InitialPoolSize: pool,
 		Logger:          &bifrostLogger{logger: opts.Logger},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("bifrost init: %w", err)
 	}
+	codexURL := opts.CodexBackendURL
+	if codexURL == "" {
+		codexURL = codexBackendDefaultURL
+	}
 	return &BifrostRouter{
 		bf:           bf,
 		logger:       opts.Logger,
 		voyageClient: newVoyageClient(),
+		endpointPolicy: newCustomerEndpointPolicy(
+			opts.BlockLocalHTTPCalls,
+			opts.RequireHTTPSCustomerEndpoints,
+			opts.AllowedEndpointHosts,
+		),
+		codexClient:     newCodexClient(),
+		codexRefresher:  opts.CodexRefresher,
+		codexBackendURL: codexURL,
 	}, nil
 }
 
@@ -83,6 +126,18 @@ func (r *BifrostRouter) Close() {
 	r.bf.Shutdown()
 }
 
+func (r *BifrostRouter) validateCredentialEndpoints(ctx context.Context, cred domain.Credential) error {
+	err := validateCredentialEndpoints(ctx, cred, r.endpointPolicy)
+	if err != nil {
+		code := domain.ErrBadRequest
+		if isRetryableEndpointResolutionError(err) {
+			code = domain.ErrProviderError
+		}
+		return herr.NewLight(ctx, code, herr.M{"reason": err.Error()})
+	}
+	return nil
+}
+
 // Dispatch sends a non-streaming request through bifrost.
 //
 // For /v1/chat/completions (RequestTypeChat) the inbound body is
@@ -99,6 +154,9 @@ func (r *BifrostRouter) Close() {
 // to an Anthropic-family provider; sending it to OpenAI is a caller
 // error and Bifrost/OpenAI will reject accordingly.
 func (r *BifrostRouter) Dispatch(ctx context.Context, req *domain.Request, cred domain.Credential) (*domain.Response, error) {
+	if err := r.validateCredentialEndpoints(ctx, cred); err != nil {
+		return nil, err
+	}
 	model := req.Model
 	if req.Resolved != nil {
 		model = req.Resolved.ModelID
@@ -113,6 +171,12 @@ func (r *BifrostRouter) Dispatch(ctx context.Context, req *domain.Request, cred 
 		return r.dispatchVoyageDirect(ctx, req, model, cred)
 	}
 
+	// Codex streams upstream always (the backend is SSE-only); the
+	// non-streaming path aggregates to the completed Response. See codex.go.
+	if cred.ProviderID == domain.ProviderOpenAICodex {
+		return r.dispatchCodex(ctx, req, model, cred)
+	}
+
 	provider := mapProvider(cred)
 
 	if req.Type == domain.RequestTypeResponses {
@@ -121,6 +185,14 @@ func (r *BifrostRouter) Dispatch(ctx context.Context, req *domain.Request, cred 
 
 	if req.Type == domain.RequestTypeEmbeddings {
 		return r.dispatchEmbeddings(ctx, req, provider, model, cred)
+	}
+
+	if req.Type == domain.RequestTypeSpeech {
+		return r.dispatchSpeech(ctx, req, provider, model, cred)
+	}
+
+	if req.Type == domain.RequestTypeTranscription {
+		return r.dispatchTranscription(ctx, req, provider, model, cred)
 	}
 
 	if req.Type == domain.RequestTypePassthrough {
@@ -391,11 +463,21 @@ func (r *BifrostRouter) dispatchVoyageDirect(
 //   - RequestTypePassthrough: dedicated dispatchPassthroughStream (Gemini
 //     /v1beta/...:streamGenerateContent).
 func (r *BifrostRouter) DispatchStream(ctx context.Context, req *domain.Request, cred domain.Credential) (domain.StreamIterator, error) {
-	provider := mapProvider(cred)
+	if err := r.validateCredentialEndpoints(ctx, cred); err != nil {
+		return nil, err
+	}
 	model := req.Model
 	if req.Resolved != nil {
 		model = req.Resolved.ModelID
 	}
+
+	// Codex bypasses Bifrost entirely: a direct SSE proxy to OpenAI's codex
+	// backend with OAuth + one-shot token refresh. See codex.go.
+	if cred.ProviderID == domain.ProviderOpenAICodex {
+		return r.dispatchCodexStream(ctx, req, model, cred)
+	}
+
+	provider := mapProvider(cred)
 
 	if req.Type == domain.RequestTypeResponses {
 		return r.dispatchResponsesStream(ctx, req, provider, model, cred)
@@ -715,11 +797,6 @@ func rawResponseFromBifrostError(berr *bfschemas.BifrostError) ([]byte, int, boo
 	return body, status, true
 }
 
-// ListModels returns an empty list — model discovery is VK-config-driven.
-func (r *BifrostRouter) ListModels(_ context.Context, _ []domain.Credential) ([]domain.Model, error) {
-	return nil, nil
-}
-
 // --- Bifrost Account (multi-tenant credential provider) ---
 
 type credCtxKey struct{}
@@ -736,7 +813,11 @@ func credentialFromContext(ctx context.Context) domain.Credential {
 }
 
 // account implements bfschemas.Account for multi-tenant credential dispatch.
-type account struct{}
+type account struct {
+	// openAIBaseURL redirects bifrost's native OpenAI provider to a local
+	// server in tests. Empty in production. See BifrostOptions.OpenAIBackendURL.
+	openAIBaseURL string
+}
 
 func (a *account) GetConfiguredProviders() ([]bfschemas.ModelProvider, error) {
 	return bfschemas.StandardProviders, nil
@@ -769,6 +850,9 @@ func (a *account) GetConfigForProvider(provider bfschemas.ModelProvider) (*bfsch
 	// anything.
 	cfg.NetworkConfig.DefaultRequestTimeoutInSeconds = ProviderRequestTimeoutSeconds
 	cfg.NetworkConfig.StreamIdleTimeoutInSeconds = ProviderRequestTimeoutSeconds
+	if provider == bfschemas.OpenAI && a.openAIBaseURL != "" {
+		cfg.NetworkConfig.BaseURL = a.openAIBaseURL
+	}
 	if proxyURL := os.Getenv("LW_GATEWAY_OUTBOUND_PROXY"); proxyURL != "" {
 		// Debug-only: route outbound provider traffic through an HTTP proxy
 		// (e.g. `http://localhost:8888` for mitmproxy). Lets operators
@@ -1038,6 +1122,51 @@ func bfErrorMsg(e *bfschemas.BifrostError) string {
 	return fmt.Sprintf("bifrost error (status %v)", e.StatusCode)
 }
 
+// upstreamStreamError converts a mid-stream BifrostError chunk into a
+// structured domain.UpstreamError the SSE writer can forward faithfully.
+//
+// Providers can fail a 200-established stream with an in-stream error event
+// whose detail nests under an `error` OBJECT (OpenAI Responses:
+// {"type":"error","error":{"type","code","message","param"}}). Bifrost's
+// stream schema maps only the legacy flat `message`/`code`/`param` fields, so
+// for the nested shape it hands over an ErrorField with an EMPTY message
+// but, on raw-forward paths (rawForwardCtx), the verbatim event body rides
+// ExtraFields.RawResponse. Recover the message from there, and keep the raw
+// body so the writer can forward the provider's own event bytes unchanged.
+func upstreamStreamError(e *bfschemas.BifrostError) *domain.UpstreamError {
+	ue := &domain.UpstreamError{Message: bfErrorMsg(e)}
+	if e == nil {
+		ue.Message = "provider stream error"
+		return ue
+	}
+	if code := e.StatusCode; code != nil {
+		ue.StatusCode = *code
+	}
+	raw, ok := extractRawResponseBytes(e.ExtraFields.RawResponse)
+	if !ok {
+		if ue.Message == "" {
+			ue.Message = "provider stream error"
+		}
+		return ue
+	}
+	var event struct {
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if sonic.Unmarshal(raw, &event) == nil && event.Error != nil {
+		// The raw body IS a provider error event, forward it verbatim.
+		ue.Body = raw
+		if ue.Message == "" {
+			ue.Message = event.Error.Message
+		}
+	}
+	if ue.Message == "" {
+		ue.Message = "provider stream error"
+	}
+	return ue
+}
+
 // --- Usage extraction ---
 
 func extractUsage(resp *bfschemas.BifrostChatResponse) domain.Usage {
@@ -1128,7 +1257,7 @@ func (it *bifrostStreamIterator) Next(ctx context.Context) bool {
 			return false
 		}
 		if chunk.BifrostError != nil {
-			it.err = fmt.Errorf("stream error: %s", bfErrorMsg(chunk.BifrostError))
+			it.err = upstreamStreamError(chunk.BifrostError)
 			it.done = true
 			return false
 		}

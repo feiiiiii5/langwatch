@@ -37,10 +37,16 @@ const SPECS_ROOT = resolve(REPO_ROOT, "specs");
 const DEFAULT_TEST_ROOTS: string[] = [
   "langwatch/src",
   "langwatch/ee",
+  "langwatch/packages",
   "langwatch/scripts",
+  "packages",
   "mcp-server/src",
   "typescript-sdk/src",
   "python-sdk/src",
+  // What we SHIP as instructions is behavior too: the skill sources and the
+  // assistant's rules are tested here (and nowhere else), so scenarios about
+  // what an instruction teaches can only bind from this root.
+  "skills/_tests",
 ];
 
 /**
@@ -83,6 +89,7 @@ const DEFAULT_GO_TEST_ROOTS: string[] = [
 const DEFAULT_PYTHON_TEST_ROOTS: string[] = [
   "langevals",
   "langwatch_server",
+  "python-sdk",
 ];
 
 /**

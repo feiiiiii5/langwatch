@@ -30,12 +30,14 @@ func Serve(ctx context.Context, application *app.App, deps *Deps, cfg Config) er
 		App:                   application,
 		Logger:                deps.Logger,
 		Health:                deps.Health,
+		Metrics:               deps.Metrics,
 		Version:               info.Version,
 		TraceRegistry:         deps.TraceRegistry,
 		DefaultExportEndpoint: cfg.CustomerTraceBridge.BaseURL + "/api/otel",
 		OTTLServer:            ottlSrv,
 		InternalSecret:        cfg.ControlPlane.InternalSecret,
 		MaxRequestBodyBytes:   cfg.Server.MaxRequestBodyBytes,
+		HeartbeatInterval:     time.Duration(cfg.NonStreamingHeartbeatIntervalSeconds) * time.Second,
 	})
 
 	srv := &http.Server{Handler: handler, Addr: cfg.Server.Addr, ReadHeaderTimeout: 10 * time.Second}
