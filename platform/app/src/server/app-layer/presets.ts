@@ -85,6 +85,7 @@ import { prisma as globalPrisma } from "~/server/db";
 import type { LangyConversationProcessingEvent } from "~/server/event-sourcing/pipelines/langy-conversation-processing/schemas/events";
 import { bindProcessFleetMetricsSource } from "~/server/event-sourcing/process-manager/metrics";
 import { BillableEventsMeterClickHouseRepository } from "~/server/event-sourcing/projections/global/repositories/billable-events.clickhouse.repository";
+import { isComponentDisabled } from "~/server/event-sourcing/utils/killSwitch";
 import { featureFlagService } from "~/server/featureFlag";
 import { getFeatureFlagStore } from "~/server/featureFlag/featureFlagStore.postgres";
 import { NOT_TARGETED } from "~/server/featureFlag/targeting";
@@ -2084,6 +2085,19 @@ export function initializeDefaultApp(options?: {
     topicClustering: {
       status: new TopicClusteringStatusService(
         new PrismaTopicClusteringStatusRepository(prisma),
+        Date.now,
+        // The SAME check the projection router applies before folding events
+        // for these projections (same aggregate type, component type and key
+        // shape — no second judgment). When it disables one, its read model
+        // stops updating, so the service can flag the stored values as stale.
+        ({ projectionName, projectId }) =>
+          isComponentDisabled({
+            featureFlagService,
+            aggregateType: "topic_clustering",
+            componentType: "projection",
+            componentName: projectionName,
+            tenantId: projectId,
+          }),
       ),
       topics,
       runPage: runClusteringPage,

@@ -6,6 +6,7 @@ import type {
   TopicClusteringStatusRecord,
   TopicClusteringStatusRepository,
 } from "../repositories/topic-clustering-status.repository";
+import type { IsTopicClusteringProjectionDisabled } from "../topic-clustering-status.service";
 import { TopicClusteringStatusService } from "../topic-clustering-status.service";
 
 const NOW = 1_800_000_000_000;
@@ -47,6 +48,7 @@ function projectionRow(
 function serviceReading(
   record: Partial<TopicClusteringStatusRecord>,
   now: number = NOW,
+  isProjectionDisabled?: IsTopicClusteringProjectionDisabled,
 ) {
   const repository: TopicClusteringStatusRepository = {
     findByProjectId: async () => ({
@@ -55,7 +57,11 @@ function serviceReading(
     }),
     findRunHistoryByProjectId: async () => [],
   };
-  return new TopicClusteringStatusService(repository, () => now);
+  return new TopicClusteringStatusService(
+    repository,
+    () => now,
+    isProjectionDisabled,
+  );
 }
 
 function serviceWithHistory(
@@ -416,6 +422,61 @@ describe("TopicClusteringStatusService run history", () => {
         ]).getRunHistoryByProjectId({ projectId: PROJECT_ID });
         expect(runs[0]?.outcome).toBe("abandoned");
       });
+    });
+  });
+});
+
+describe("TopicClusteringStatusService paused projections", () => {
+  const completedRow = projectionRow({
+    LastRunAt: NOW - 1_000,
+    LastRunOutcome: "completed",
+  });
+
+  describe("given the kill switch has paused a projection", () => {
+    /** @scenario A paused projection's last stored values are marked stale */
+    it("marks the status and the history stale", async () => {
+      const status = await serviceReading(
+        { projection: completedRow },
+        NOW,
+        async () => true,
+      ).getByProjectId({ projectId: PROJECT_ID });
+
+      expect(status.isStatusStale).toBe(true);
+      expect(status.isRunHistoryStale).toBe(true);
+    });
+
+    it("marks only the read model whose projection is paused", async () => {
+      const status = await serviceReading(
+        { projection: completedRow },
+        NOW,
+        async ({ projectionName }) =>
+          projectionName === "topicClusteringRunStatus",
+      ).getByProjectId({ projectId: PROJECT_ID });
+
+      expect(status.isStatusStale).toBe(true);
+      expect(status.isRunHistoryStale).toBe(false);
+    });
+
+    it("marks nothing stale once the projections are enabled again", async () => {
+      const status = await serviceReading(
+        { projection: completedRow },
+        NOW,
+        async () => false,
+      ).getByProjectId({ projectId: PROJECT_ID });
+
+      expect(status.isStatusStale).toBe(false);
+      expect(status.isRunHistoryStale).toBe(false);
+    });
+  });
+
+  describe("given no kill-switch check is wired", () => {
+    it("treats the stored values as current, like the router does without a flag service", async () => {
+      const status = await serviceReading({
+        projection: completedRow,
+      }).getByProjectId({ projectId: PROJECT_ID });
+
+      expect(status.isStatusStale).toBe(false);
+      expect(status.isRunHistoryStale).toBe(false);
     });
   });
 });

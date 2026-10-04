@@ -263,12 +263,20 @@ function ClusteringStatusCard({
                 status.data.lastRunOutcome,
                 status.data.isRunInFlight,
               )}
+              {status.data.isStatusStale && (
+                <Badge colorPalette="orange">Stale</Badge>
+              )}
               {status.data.lastRunAt && (
                 <Text color="fg.muted">
                   {formatTimeAgo(status.data.lastRunAt)}
                 </Text>
               )}
             </HStack>
+            {status.data.isStatusStale && (
+              <Text fontSize="sm" color="fg.muted">
+                Projection paused; showing last stored values.
+              </Text>
+            )}
             {status.data.lastRunOutcome === "completed" && (
               <Text fontSize="sm" color="fg.muted">
                 {/* The mode is only trustworthy on a completed run: a failure
@@ -387,6 +395,9 @@ function RunHistoryCard({ projectId }: { projectId: string }) {
           : false,
     },
   );
+  // Same query key as ClusteringStatusCard's, so this reuses the cached
+  // request instead of issuing a second one.
+  const status = api.topics.getClusteringStatus.useQuery({ projectId });
 
   return (
     <Card.Root width="full" overflow="hidden">
@@ -394,6 +405,14 @@ function RunHistoryCard({ projectId }: { projectId: string }) {
         <Heading>Run history</Heading>
       </Card.Header>
       <Card.Body width="full" paddingX={0} paddingY={0} overflowX="auto">
+        {status.data?.isRunHistoryStale && (
+          <HStack gap={2} paddingX={6} paddingY={4}>
+            <Badge colorPalette="orange">Stale</Badge>
+            <Text fontSize="sm" color="fg.muted">
+              Projection paused; showing last stored values.
+            </Text>
+          </HStack>
+        )}
         {history.isLoading ? (
           <VStack align="start" gap={2} width="full" padding={6}>
             <Skeleton height="20px" width="80%" />

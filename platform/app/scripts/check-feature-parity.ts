@@ -569,7 +569,6 @@ const LEGACY_INERT: string[] = [
   "specs/skills/prompt-compiler.feature",
   "specs/studio/nlpgo-true-root-span-without-traceparent.feature",
   "specs/suites/simulations-performance.feature",
-  "specs/topic-clustering/run-history.feature",
   "specs/topic-clustering/topics-source-of-truth.feature",
   "specs/trace-drawer/attribute-table.feature",
   "specs/trace-drawer/eval-chips-in-header.feature",
@@ -655,6 +654,13 @@ const LEGACY_INERT: string[] = [
  *   - Every entry must still be partially tagged.
  */
 const LEGACY_PARTIAL: string[] = [
+  // Reason: left LEGACY_INERT when projection kill switches gained a stale
+  // signal (#8301); the "A paused projection's last stored values are marked
+  // stale" rule is enforced by the service unit test. The seven older
+  // scenarios describe run-history presentation that predates the binding
+  // convention and is exercised by the existing untagged suite; they stay
+  // untagged.
+  "specs/topic-clustering/run-history.feature",
   // Reason: left LEGACY_INERT when sub-cent costs stopped reading as zero;
   // the "Cost formatting" rule is enforced. The pills, duration, token and
   // span tab rules are described here and stay untagged.

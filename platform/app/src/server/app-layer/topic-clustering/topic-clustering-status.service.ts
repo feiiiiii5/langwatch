@@ -3,6 +3,30 @@ import type { TopicClusteringRunHistoryEntry } from "~/server/event-sourcing/pip
 import { TOPIC_CLUSTERING_RUN_OUTCOME } from "~/server/event-sourcing/pipelines/topic-clustering-processing/schemas/constants";
 import type { TopicClusteringStatusRepository } from "./repositories/topic-clustering-status.repository";
 
+/**
+ * The two read-model projections this service reads, named exactly as the
+ * `topic_clustering_processing` pipeline declares them, so the composition
+ * root can wire this to the same kill-switch check the projection router
+ * applies before folding events.
+ */
+export type TopicClusteringProjectionName =
+  | "topicClusteringRunStatus"
+  | "topicClusteringRunHistory";
+
+/**
+ * Whether the event-sourcing kill switch currently disables one of those
+ * projections for a project. The composition root wires this to
+ * `isComponentDisabled` — the same function, aggregate type, component type
+ * and key shape the projection router consults to skip folding — so the read
+ * side and the write side cannot disagree about what is paused. When no check
+ * is wired (or the check errors), values read as current, matching the
+ * router's fail-open: events fold when the flag service is absent.
+ */
+export type IsTopicClusteringProjectionDisabled = (params: {
+  projectionName: TopicClusteringProjectionName;
+  projectId: string;
+}) => Promise<boolean>;
+
 export interface TopicClusteringStatus {
   lastRequestedAt: number | null;
   lastRequestTrigger: string | null;
@@ -54,6 +78,22 @@ export interface TopicClusteringStatus {
    * instead of pinning the UI to "Running" forever.
    */
   isRunInFlight: boolean;
+  /**
+   * True when the run-status projection is currently paused by its kill
+   * switch. The router then skips this projection's events, so everything
+   * above stopped updating: these are the LAST STORED values, not the state
+   * of a recent run, and the Settings page must say so instead of implying
+   * freshness. False when no kill-switch check is wired or the check errors —
+   * the same fail-open the router applies (events fold when it cannot
+   * decide). The switch has a cache TTL, so the flag can lag the operator's
+   * change by up to that TTL.
+   */
+  isStatusStale: boolean;
+  /**
+   * Same as `isStatusStale`, for the run-history projection and the read
+   * model served by `getRunHistoryByProjectId`.
+   */
+  isRunHistoryStale: boolean;
   /** Epoch ms of the next scheduled daily run, or null when unscheduled. */
   nextRunAt: number | null;
 }
@@ -63,6 +103,7 @@ export class TopicClusteringStatusService {
   constructor(
     private readonly repository: TopicClusteringStatusRepository,
     private readonly now: () => number = Date.now,
+    private readonly isProjectionDisabled?: IsTopicClusteringProjectionDisabled,
   ) {}
 
   async getByProjectId(params: {
@@ -70,6 +111,24 @@ export class TopicClusteringStatusService {
   }): Promise<TopicClusteringStatus> {
     const { projection, nextWakeAt } =
       await this.repository.findByProjectId(params);
+
+    // Ask the SAME check the router asks before folding. Each flag tracks
+    // its own projection: a paused run-status projection freezes the values
+    // below, a paused run-history projection freezes the history, and each
+    // flag tracks only its own projection. Unwired or erroring, both read
+    // false.
+    const [isStatusStale, isRunHistoryStale] = this.isProjectionDisabled
+      ? await Promise.all([
+          this.isProjectionDisabled({
+            projectionName: "topicClusteringRunStatus",
+            projectId: params.projectId,
+          }),
+          this.isProjectionDisabled({
+            projectionName: "topicClusteringRunHistory",
+            projectId: params.projectId,
+          }),
+        ])
+      : [false, false];
 
     const lastRequestedAt = projection?.LastRequestedAt ?? null;
     const lastRunAt = projection?.LastRunAt ?? null;
@@ -103,6 +162,8 @@ export class TopicClusteringStatusService {
           lastRunAt,
           lastRequestTrigger: projection?.LastRequestTrigger ?? null,
         }),
+      isStatusStale,
+      isRunHistoryStale,
       nextRunAt: nextWakeAt?.getTime() ?? null,
     };
   }

@@ -48,3 +48,10 @@ Feature: Topic clustering run history
     Given the run history read model is lost or corrupted
     When projections are replayed from the event log
     Then the run history shows the same entries as before
+
+  @unit
+  Scenario: A paused projection's last stored values are marked stale
+    Given the kill switch has paused the run-status or run-history projection
+    When the user opens the topic clustering settings page
+    Then the affected status and history are marked stale
+    And the page says it is showing last stored values
