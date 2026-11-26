@@ -17,6 +17,9 @@ vi.mock("ora", () => ({
   }),
 }));
 
+import { resolveCredentials } from "../../../utils/apiKey";
+import { projectScopeNotSupported } from "../../../utils/projectScope";
+
 import { createSecretCommand } from "../create";
 import { deleteSecretCommand } from "../delete";
 import { getSecretCommand } from "../get";
@@ -157,6 +160,43 @@ describe("createSecretCommand()", () => {
         body: expect.stringContaining("MY_API_KEY"),
       }),
     );
+  });
+
+  it("creates a secret with a key-scoped credential that has no projectId", async () => {
+    // A legacy project key has no selector: applyProjectScope() returns undefined,
+    // so resolution reports no project. The server reads the project off the key.
+    vi.mocked(resolveCredentials).mockResolvedValueOnce({
+      apiKey: "sk-lw-projectkey",
+      source: "env",
+      endpoint: "https://app.langwatch.ai",
+      projectId: undefined,
+    });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => makeSecret(),
+    });
+
+    const result = await createSecretCommand("QA_ECHO_KEY", { value: "x" });
+
+    expect(result?.data).toEqual(makeSecret());
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toEqual({ name: "QA_ECHO_KEY", value: "x" });
+    expect(body).not.toHaveProperty("projectId");
+  });
+
+  it("still refuses --project with a project key", async () => {
+    const refusal = projectScopeNotSupported({
+      selector: "other-project",
+      keySource: "env-key",
+    });
+    vi.mocked(resolveCredentials).mockRejectedValueOnce(refusal);
+
+    await expect(createSecretCommand("QA_ECHO_KEY", { value: "x" })).rejects.toThrow(
+      refusal.message,
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it("rejects invalid name format", async () => {

@@ -20,9 +20,6 @@ export const createSecretCommand = async (
   options: { value: string },
 ): Promise<CommandResult | void> => {
   const credentials = await resolveCredentials();
-  if (!credentials.projectId) {
-    throw new Error("A project must be selected for secret operations");
-  }
 
   if (!/^[A-Z][A-Z0-9_]*$/.test(name)) {
     reportCommandError({
@@ -46,7 +43,7 @@ export const createSecretCommand = async (
         ...buildRequestHeaders({ apiKey }),
       },
       body: JSON.stringify({
-        projectId: credentials.projectId,
+        ...(credentials.projectId ? { projectId: credentials.projectId } : {}),
         name,
         value: options.value,
       }),
